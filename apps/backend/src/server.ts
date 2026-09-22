@@ -53,8 +53,7 @@ app.get('/api/v1/foreigners',requireAuth,async(req:AuthRequest,res)=>{
     (SELECT row_to_json(r) FROM registrations r WHERE r.foreigner_id=f.id ORDER BY r.end_date DESC LIMIT 1) registration
     FROM foreigners f WHERE f.organization_id=$1`
   if(q){params.push(`%${q}%`);sql+=' AND (f.first_name ILIKE $2 OR f.last_name ILIKE $2 OR f.middle_name ILIKE $2 OR f.citizenship ILIKE $2 OR f.phone ILIKE $2 OR f.email ILIKE $2 OR EXISTS (SELECT 1 FROM identity_documents sd WHERE sd.foreigner_id=f.id AND sd.document_number ILIKE $2))'}
-  sql+=' ORDER BY f.created_at DESC'
-  sql+=' AND f.status<>\'ARCHIVED\'';\n  sql+=' ORDER BY f.created_at DESC'\n  const r=await query(sql,params); res.json({data:r.rows,total:r.rowCount})
+  sql+=' AND f.status<>\'ARCHIVED\''\n  sql+=' ORDER BY f.created_at DESC'\n  const r=await query(sql,params); res.json({data:r.rows,total:r.rowCount})
 })
 
 app.get('/api/v1/foreigners/:id',requireAuth,async(req:AuthRequest,res)=>{
