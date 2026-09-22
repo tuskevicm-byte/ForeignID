@@ -4,6 +4,9 @@ import 'dotenv/config'
 import {query,pool} from './db.js'
 import {requireAuth,allow,signToken,verifyPassword,AuthRequest} from './auth.js'
 import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import {fileURLToPath} from 'node:url'
 
 const app=express()
 app.use(cors())
@@ -151,5 +154,8 @@ app.post('/api/v1/government/applications',requireAuth,allow('SUPER_ADMIN','ORG_
   await audit(req,'CREATE','APPLICATION',r.rows[0].id,{serviceType});res.status(201).json(r.rows[0])
 })
 
+const schemaPath=path.join(path.dirname(fileURLToPath(import.meta.url)),'schema.sql')
+await query(fs.readFileSync(schemaPath,'utf8'))
+console.log('Database schema applied')
 app.listen(Number(process.env.PORT||3000),()=>console.log('ForeignID API on :3000'))
 process.on('SIGTERM',()=>pool.end())
