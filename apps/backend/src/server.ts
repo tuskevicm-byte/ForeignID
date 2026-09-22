@@ -53,7 +53,9 @@ app.get('/api/v1/foreigners',requireAuth,async(req:AuthRequest,res)=>{
     (SELECT row_to_json(r) FROM registrations r WHERE r.foreigner_id=f.id ORDER BY r.end_date DESC LIMIT 1) registration
     FROM foreigners f WHERE f.organization_id=$1`
   if(q){params.push(`%${q}%`);sql+=' AND (f.first_name ILIKE $2 OR f.last_name ILIKE $2 OR f.middle_name ILIKE $2 OR f.citizenship ILIKE $2 OR f.phone ILIKE $2 OR f.email ILIKE $2 OR EXISTS (SELECT 1 FROM identity_documents sd WHERE sd.foreigner_id=f.id AND sd.document_number ILIKE $2))'}
-  sql+=' AND f.status<>\'ARCHIVED\''\n  sql+=' ORDER BY f.created_at DESC'\n  const r=await query(sql,params); res.json({data:r.rows,total:r.rowCount})
+  sql+=' AND f.status<>\'ARCHIVED\''
+  sql+=' ORDER BY f.created_at DESC'
+  const r=await query(sql,params); res.json({data:r.rows,total:r.rowCount})
 })
 
 app.get('/api/v1/foreigners/:id',requireAuth,async(req:AuthRequest,res)=>{
@@ -193,13 +195,13 @@ app.delete('/api/v1/files/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPER
 
 app.get('/api/v1/deadlines',requireAuth,async(req:AuthRequest,res)=>{
   const r=await query(`SELECT * FROM (
-    SELECT f.id foreigner_id,f.first_name,f.last_name,'Документ' item_type,d.document_type item_name,d.expiry_date end_date FROM identity_documents d JOIN foreigners f ON f.id=d.foreigner_id WHERE f.organization_id=$1
+    SELECT f.id foreigner_id,f.first_name,f.last_name,'Документ' item_type,d.document_type item_name,d.expiry_date end_date FROM identity_documents d JOIN foreigners f ON f.id=d.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED'
     UNION ALL
-    SELECT f.id,f.first_name,f.last_name,'Виза',v.visa_type,v.end_date FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE f.organization_id=$1
+    SELECT f.id,f.first_name,f.last_name,'Виза',v.visa_type,v.end_date FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED'
     UNION ALL
     SELECT f.id,f.first_name,f.last_name,'Регистрация',r.registration_type,r.end_date FROM registrations r JOIN foreigners f ON f.id=r.foreigner_id WHERE f.organization_id=$1
     UNION ALL
-    SELECT f.id,f.first_name,f.last_name,'Страховка','Страховой полис',f.insurance_end_date FROM foreigners f WHERE f.organization_id=$1 AND f.insurance_end_date IS NOT NULL
+    SELECT f.id,f.first_name,f.last_name,'Страховка','Страховой полис',f.insurance_end_date FROM foreigners f WHERE f.organization_id=$1 AND f.status<>'ARCHIVED' AND f.insurance_end_date IS NOT NULL
   ) x WHERE end_date IS NOT NULL ORDER BY end_date ASC`,[req.user.organization_id])
   res.json({data:r.rows.map((x:any)=>({...x,deadline_status:new Date(x.end_date)<new Date()?'EXPIRED':Math.ceil((new Date(x.end_date).getTime()-Date.now())/86400000)<=30?'WARNING':'NORMAL'}))})
 })
@@ -232,7 +234,12 @@ app.get('/api/v1/diagnostics/visa-distribution',requireAuth,allow('SUPER_ADMIN',
 })
 
 app.get('/api/v1/history',requireAuth,async(req:AuthRequest,res)=>{
-  const foreignerId=String(req.query.foreignerId||'').trim()\n  const params:any[]=[req.user.organization_id]\n  let sql=`SELECT a.*,u.first_name,u.last_name FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id WHERE a.organization_id=$1`\n  if(foreignerId){params.push(foreignerId);sql+=' AND ((a.entity_type=\'FOREIGNER\' AND a.entity_id=$2) OR (a.entity_type IN (\'DOCUMENT\',\'VISA\',\'REGISTRATION\',\'FILE\') AND a.entity_id IN (SELECT id FROM identity_documents WHERE foreigner_id=$2 UNION ALL SELECT id FROM visas WHERE foreigner_id=$2 UNION ALL SELECT id FROM registrations WHERE foreigner_id=$2 UNION ALL SELECT id FROM foreigner_files WHERE foreigner_id=$2)))'}\n  sql+=' ORDER BY a.created_at DESC LIMIT 200'\n  const r=await query(sql,params);res.json({data:r.rows})
+  const foreignerId=String(req.query.foreignerId||'').trim()
+  const params:any[]=[req.user.organization_id]
+  let sql=`SELECT a.*,u.first_name,u.last_name FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id WHERE a.organization_id=$1`
+  if(foreignerId){params.push(foreignerId);sql+=' AND ((a.entity_type=\'FOREIGNER\' AND a.entity_id=$2) OR (a.entity_type IN (\'DOCUMENT\',\'VISA\',\'REGISTRATION\',\'FILE\') AND a.entity_id IN (SELECT id FROM identity_documents WHERE foreigner_id=$2 UNION ALL SELECT id FROM visas WHERE foreigner_id=$2 UNION ALL SELECT id FROM registrations WHERE foreigner_id=$2 UNION ALL SELECT id FROM foreigner_files WHERE foreigner_id=$2)))'}
+  sql+=' ORDER BY a.created_at DESC LIMIT 200'
+  const r=await query(sql,params);res.json({data:r.rows})
 })
 
 app.get('/api/v1/applications',requireAuth,async(req:AuthRequest,res)=>{
@@ -241,7 +248,11 @@ app.get('/api/v1/applications',requireAuth,async(req:AuthRequest,res)=>{
 })
 
 app.post('/api/v1/government/applications',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
-  const {foreignerId,serviceType}=req.body||{}\n  if(!foreignerId||!serviceType)return res.status(400).json({message:'Иностранец и услуга обязательны'})\n  const own=await query("SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2 AND status<>'ARCHIVED'",[foreignerId,req.user.organization_id])\n  if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})\n  const r=await query('INSERT INTO government_applications(organization_id,foreigner_id,service_type,status) VALUES($1,$2,$3,$4) RETURNING *',
+  const {foreignerId,serviceType}=req.body||{}
+  if(!foreignerId||!serviceType)return res.status(400).json({message:'Иностранец и услуга обязательны'})
+  const own=await query("SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2 AND status<>'ARCHIVED'",[foreignerId,req.user.organization_id])
+  if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
+  const r=await query('INSERT INTO government_applications(organization_id,foreigner_id,service_type,status) VALUES($1,$2,$3,$4) RETURNING *',
     [req.user.organization_id,foreignerId,serviceType,'READY_FOR_OFFICIAL_SUBMISSION'])
   await audit(req,'CREATE','APPLICATION',r.rows[0].id,{serviceType});res.status(201).json(r.rows[0])
 })
