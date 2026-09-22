@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client'
 import './styles.css'
 
 const API=import.meta.env.VITE_API_URL||'http://localhost:3000/api/v1'
-const empty={firstName:'',middleName:'',lastName:'',citizenship:'',birthDate:'',phone:'',email:''}
+const blank={firstName:'',middleName:'',lastName:'',citizenship:'',birthDate:'',gender:'',phone:'',email:'',entryDate:'',stayBasis:'',stayAddress:'',insuranceCompany:'',insurancePolicyNumber:'',insuranceEndDate:'',photoUrl:''}
 
 function App(){
   const [token,setToken]=React.useState(localStorage.getItem('token'))
@@ -14,12 +14,15 @@ function App(){
   const [error,setError]=React.useState('')
   const [foreigners,setForeigners]=React.useState<any[]>([])
   const [selected,setSelected]=React.useState<any>(null)
-  const [show,setShow]=React.useState(false)
-  const [form,setForm]=React.useState(empty)
+  const [form,setForm]=React.useState<any>(blank)
+  const [wizard,setWizard]=React.useState(false)
+  const [editing,setEditing]=React.useState(false)
+  const [step,setStep]=React.useState(1)
+  const [saving,setSaving]=React.useState(false)
+  const [data,setData]=React.useState<any>({})
   const [doc,setDoc]=React.useState({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''})
   const [visa,setVisa]=React.useState({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''})
-  const [data,setData]=React.useState<any>({})
-  const [saving,setSaving]=React.useState(false)
+  const [registration,setRegistration]=React.useState({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''})
 
   async function api(path:string,opts:any={}){
     const headers:any={'Content-Type':'application/json',...(opts.headers||{})}
@@ -31,10 +34,8 @@ function App(){
   }
   async function login(e:any){
     e.preventDefault();setError('')
-    try{
-      const d=await api('/auth/login',{method:'POST',headers:{},body:JSON.stringify({email,password})})
-      localStorage.setItem('token',d.accessToken);setToken(d.accessToken)
-    }catch(e:any){setError(e.message)}
+    try{const d=await api('/auth/login',{method:'POST',body:JSON.stringify({email,password})});localStorage.setItem('token',d.accessToken);setToken(d.accessToken)}
+    catch(e:any){setError(e.message)}
   }
   async function loadForeigners(){
     if(!token)return
@@ -43,38 +44,55 @@ function App(){
   }
   async function loadSection(){
     if(!token)return
-    setError('')
     try{
       if(active==='Главная'||active==='Отчёты')setData(await api('/dashboard'))
-      if(active==='Контроль сроков')setData(await api('/deadlines'))
-      if(active==='Документы'){const [d,v]=await Promise.all([api('/documents'),api('/visas')]);setData({documents:d.data||[],visas:v.data||[]})}
-      if(active==='История')setData(await api('/history'))
-      if(active==='Е-паслуга')setData(await api('/applications'))
+      else if(active==='Контроль сроков')setData(await api('/deadlines'))
+      else if(active==='Документы'){const [d,v]=await Promise.all([api('/documents'),api('/visas')]);setData({documents:d.data||[],visas:v.data||[]})}
+      else if(active==='История')setData(await api('/history'))
+      else if(active==='Е-паслуга')setData(await api('/applications'))
     }catch(e:any){setError(e.message)}
   }
   React.useEffect(()=>{loadForeigners()},[token,q])
   React.useEffect(()=>{loadSection()},[token,active])
 
+  function startAdd(){setForm({...blank});setStep(1);setEditing(false);setWizard(true);setError('')}
+  function startEdit(){if(!selected)return;setForm({...blank,...selected.foreigner,firstName:selected.foreigner.first_name,middleName:selected.foreigner.middle_name||'',lastName:selected.foreigner.last_name,citizenship:selected.foreigner.citizenship,birthDate:selected.foreigner.birth_date||'',gender:selected.foreigner.gender||'',phone:selected.foreigner.phone||'',email:selected.foreigner.email||'',entryDate:selected.foreigner.entry_date||'',stayBasis:selected.foreigner.stay_basis||'',stayAddress:selected.foreigner.stay_address||'',insuranceCompany:selected.foreigner.insurance_company||'',insurancePolicyNumber:selected.foreigner.insurance_policy_number||'',insuranceEndDate:selected.foreigner.insurance_end_date||'',photoUrl:selected.foreigner.photo_url||''});setStep(1);setEditing(true);setWizard(true);setError('')}
   async function saveForeigner(e:any){
-    e.preventDefault();setSaving(true)
-    try{await api('/foreigners',{method:'POST',body:JSON.stringify(form)});setShow(false);setForm(empty);await loadForeigners()}
-    catch(e:any){setError(e.message)}finally{setSaving(false)}
+    e.preventDefault();setSaving(true);setError('')
+    try{
+      const payload={...form}
+      if(editing)await api('/foreigners/'+selected.foreigner.id,{method:'PATCH',body:JSON.stringify(payload)})
+      else await api('/foreigners',{method:'POST',body:JSON.stringify(payload)})
+      setWizard(false);setEditing(false);await loadForeigners()
+      if(editing)await openForeigner({id:selected.foreigner.id})
+    }catch(e:any){setError(e.message)}finally{setSaving(false)}
   }
   async function openForeigner(x:any){try{setSelected(await api('/foreigners/'+x.id))}catch(e:any){setError(e.message)}}
   async function archive(id:string){
-    if(!window.confirm('Архивировать запись?'))return
-    try{await api('/foreigners/'+id,{method:'DELETE'});setSelected(null);await loadForeigners()}
-    catch(e:any){setError(e.message)}
+    if(!confirm('Архивировать запись?'))return
+    try{await api('/foreigners/'+id,{method:'DELETE'});setSelected(null);await loadForeigners()}catch(e:any){setError(e.message)}
   }
   async function saveDoc(e:any){
     e.preventDefault()
     try{await api('/documents',{method:'POST',body:JSON.stringify({...doc,foreignerId:selected.foreigner.id})});setDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''});await openForeigner(selected.foreigner)}
     catch(e:any){setError(e.message)}
   }
+  async function deleteDoc(id:string){if(!confirm('Удалить документ?'))return;try{await api('/documents/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
   async function saveVisa(e:any){
     e.preventDefault()
     try{await api('/visas',{method:'POST',body:JSON.stringify({...visa,foreignerId:selected.foreigner.id})});setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});await openForeigner(selected.foreigner)}
     catch(e:any){setError(e.message)}
+  }
+  async function deleteVisa(id:string){if(!confirm('Удалить визу/разрешение?'))return;try{await api('/visas/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
+  async function saveRegistration(e:any){
+    e.preventDefault()
+    try{await api('/registrations',{method:'POST',body:JSON.stringify({...registration,foreignerId:selected.foreigner.id})});setRegistration({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''});await openForeigner(selected.foreigner)}
+    catch(e:any){setError(e.message)}
+  }
+  async function readPhoto(e:any){
+    const file=e.target.files?.[0];if(!file)return
+    if(file.size>1500000){setError('Фото слишком большое. Максимум 1.5 МБ.');return}
+    const reader=new FileReader();reader.onload=()=>setForm((x:any)=>({...x,photoUrl:String(reader.result)}));reader.readAsDataURL(file)
   }
 
   if(!token)return <div className="login"><form onSubmit={login}><h1>ForeignID</h1><p>Система учета иностранных граждан</p><input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email"/><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Пароль"/>{error&&<div className="error">{error}</div>}<button className="primary">Войти</button><small>Демо: admin@example.local / ChangeMe-123!</small></form></div>
@@ -82,37 +100,58 @@ function App(){
   const nav=['Главная','Иностранцы','Контроль сроков','Е-паслуга','Документы','Отчёты','История','Настройки']
   const stats=(n:any,l:string)=><div className="stat"><b>{n??0}</b><span>{l}</span></div>
 
-  function Dashboard(){return <><h1>Главная</h1><p className="muted">Единая рабочая панель ForeignID</p><div className="cards">{stats(data.foreigners,'Иностранцев')}{stats(data.documents,'Документов')}{stats(data.visas,'Активных виз')}{stats(data.registrations,'Регистраций')}{stats(data.todayActions,'Операций сегодня')}</div><div className="panel pad"><h2>Что контролируется</h2><p>Паспорта и другие документы, визы и разрешения, регистрации и история изменений.</p></div></>}
+  function Dashboard(){return <><h1>Главная</h1><p className="muted">Общая информация по иностранным гражданам</p><div className="cards">{stats(data.foreigners,'Всего иностранцев')}{stats(data.visas,'Активные')}{stats(0,'Срок заканчивается')}{stats(0,'Просроченные')}{stats(data.registrations,'Регистрации')}</div><div className="grid2"><div className="panel pad"><h2>Что контролируется</h2><p>Документы, визы и разрешения, регистрации, въезд, страхование и история действий.</p></div><div className="panel pad"><h2>Последние действия</h2><p>Откройте раздел «История» для полного журнала операций.</p></div></div></>}
 
   function Foreigners(){
-    return <><div className="page-title-row"><div><h1>Иностранцы</h1><p className="muted">Карточка, документы, визы и сроки</p></div><button className="primary" onClick={()=>setShow(true)}>+ Добавить иностранца</button></div>{error&&<div className="error">{error}</div>}<div className="panel"><table><thead><tr><th>ФИО</th><th>Гражданство</th><th>Документ</th><th>Виза до</th><th>Регистрация до</th><th></th></tr></thead><tbody>{foreigners.filter(x=>x.status!=='ARCHIVED').map(x=><tr key={x.id}><td><button className="link" onClick={()=>openForeigner(x)}>{x.last_name} {x.first_name} {x.middle_name||''}</button></td><td>{x.citizenship}</td><td>{x.document?.document_number||'—'}</td><td>{x.visa?.end_date||'—'}</td><td>{x.registration?.end_date||'—'}</td><td><button onClick={()=>openForeigner(x)}>Открыть</button></td></tr>)}</tbody></table></div>
-      {show&&<div className="modal-backdrop"><div className="modal"><div className="modal-header"><h2>Добавить иностранца</h2><button onClick={()=>setShow(false)}>×</button></div><form onSubmit={saveForeigner}><div className="form-grid">{[['Имя *','firstName'],['Фамилия *','lastName'],['Отчество','middleName'],['Гражданство *','citizenship'],['Дата рождения','birthDate'],['Телефон','phone'],['Email','email']].map(([label,name]:any)=><label key={name}>{label}<input type={name==='birthDate'?'date':name==='email'?'email':'text'} required={label.includes('*')} value={(form as any)[name]} onChange={e=>setForm({...form,[name]:e.target.value})}/></label>)}</div><div className="modal-actions"><button type="button" onClick={()=>setShow(false)}>Отмена</button><button className="primary" disabled={saving}>{saving?'Сохранение...':'Сохранить'}</button></div></form></div></div>}</>
+    return <><div className="page-title-row"><div><h1>Иностранцы</h1><p className="muted">Список всех иностранных граждан</p></div><button className="primary" onClick={startAdd}>+ Добавить</button></div>{error&&<div className="error">{error}</div>}<div className="panel"><table><thead><tr><th>ФИО</th><th>Гражданство</th><th>Документ</th><th>Виза / Разрешение</th><th>Регистрация</th><th>Статус</th><th>Действия</th></tr></thead><tbody>{foreigners.filter(x=>x.status!=='ARCHIVED').map(x=><tr key={x.id}><td><button className="link" onClick={()=>openForeigner(x)}>{x.last_name} {x.first_name} {x.middle_name||''}</button></td><td>{x.citizenship}</td><td>{x.document?.document_number||'—'}</td><td>{x.visa?.end_date||'—'}</td><td>{x.registration?.end_date||'—'}</td><td><span className="ok">Активен</span></td><td><button onClick={()=>openForeigner(x)}>Открыть</button></td></tr>)}</tbody></table></div>{wizard&&<Wizard/>}</>
+  }
+
+  function Wizard(){
+    const labels=['Основные данные','Документ','Въезд','Виза / разрешение','Регистрация','Страховка','Документы','Проверка']
+    return <div className="modal-backdrop"><div className="modal wizard"><div className="modal-header"><div><h2>{editing?'Редактировать иностранца':'Добавление иностранца'}</h2><div className="steps">{labels.map((x,i)=><button type="button" key={x} className={step===i+1?'step active':'step'} onClick={()=>setStep(i+1)}>{i+1}. {x}</button>)}</div></div><button onClick={()=>setWizard(false)}>×</button></div>
+      <form onSubmit={saveForeigner}>
+      {step===1&&<div className="wizard-grid"><div className="panel pad"><h3>Личные данные</h3><div className="form-grid">{[['Фамилия *','lastName'],['Имя *','firstName'],['Отчество','middleName'],['Гражданство *','citizenship'],['Дата рождения','birthDate'],['Пол','gender'],['Телефон','phone'],['Email','email']].map(([l,n]:any)=><label key={n}>{l}<input type={n==='birthDate'?'date':n==='email'?'email':'text'} required={l.includes('*')} value={form[n]} onChange={e=>setForm({...form,[n]:e.target.value})}/></label>)}</div></div><div className="panel pad"><h3>Фотография</h3>{form.photoUrl?<img className="photo" src={form.photoUrl} />:<div className="photo-empty">Фото не загружено</div>}<input type="file" accept="image/*" onChange={readPhoto}/></div></div>}
+      {step===2&&<div className="panel pad"><h3>Документ удостоверяющий личность</h3><div className="form-grid">{[['Тип документа','documentType'],['Номер','documentNumber'],['Страна выдачи','issuingCountry'],['Дата выдачи','issueDate'],['Срок действия','expiryDate']].map(([l,n]:any)=><label key={n}>{l}<input type={n.includes('Date')?'date':'text'} value={(doc as any)[n==='documentType'?'documentType':n==='documentNumber'?'documentNumber':n==='issuingCountry'?'issuingCountry':n==='issueDate'?'issueDate':'expiryDate']} onChange={e=>setDoc({...doc,[n]:e.target.value})}/></label>)}</div></div>}
+      {step===3&&<div className="panel pad"><h3>Въезд и пребывание в Республике Беларусь</h3><div className="form-grid"><label>Дата въезда<input type="date" value={form.entryDate} onChange={e=>setForm({...form,entryDate:e.target.value})}/></label><label>Основание пребывания<input value={form.stayBasis} onChange={e=>setForm({...form,stayBasis:e.target.value})} placeholder="Работа, учеба, частный визит..."/></label><label className="wide">Адрес пребывания<input value={form.stayAddress} onChange={e=>setForm({...form,stayAddress:e.target.value})}/></label></div></div>}
+      {step===4&&<div className="panel pad"><h3>Виза / разрешение</h3><div className="form-grid"><label>Тип<input value={visa.visaType} onChange={e=>setVisa({...visa,visaType:e.target.value})}/></label><label>Номер<input value={visa.visaNumber} onChange={e=>setVisa({...visa,visaNumber:e.target.value})}/></label><label>Дата выдачи<input type="date" value={visa.issueDate} onChange={e=>setVisa({...visa,issueDate:e.target.value})}/></label><label>Начало<input type="date" value={visa.startDate} onChange={e=>setVisa({...visa,startDate:e.target.value})}/></label><label>Окончание<input type="date" value={visa.endDate} onChange={e=>setVisa({...visa,endDate:e.target.value})}/></label><label className="wide">Примечание<textarea value={visa.notes} onChange={e=>setVisa({...visa,notes:e.target.value})}/></label></div><p className="muted">Виза сохраняется после создания карточки.</p></div>}
+      {step===5&&<div className="panel pad"><h3>Регистрация</h3><div className="form-grid"><label>Тип<input value={registration.registrationType} onChange={e=>setRegistration({...registration,registrationType:e.target.value})}/></label><label>Номер<input value={registration.registrationNumber} onChange={e=>setRegistration({...registration,registrationNumber:e.target.value})}/></label><label>Дата начала<input type="date" value={registration.startDate} onChange={e=>setRegistration({...registration,startDate:e.target.value})}/></label><label>Дата окончания<input type="date" value={registration.endDate} onChange={e=>setRegistration({...registration,endDate:e.target.value})}/></label><label className="wide">Гос. номер / ссылка<input value={registration.governmentReference} onChange={e=>setRegistration({...registration,governmentReference:e.target.value})}/></label></div></div>}
+      {step===6&&<div className="panel pad"><h3>Страхование</h3><div className="form-grid"><label>Страховая компания<input value={form.insuranceCompany} onChange={e=>setForm({...form,insuranceCompany:e.target.value})}/></label><label>Номер полиса<input value={form.insurancePolicyNumber} onChange={e=>setForm({...form,insurancePolicyNumber:e.target.value})}/></label><label>Действует до<input type="date" value={form.insuranceEndDate} onChange={e=>setForm({...form,insuranceEndDate:e.target.value})}/></label></div></div>}
+      {step===7&&<div className="panel pad"><h3>Прикрепленные документы</h3><p>После сохранения карточки документы можно добавлять и удалять из профиля. Защищенное файловое хранилище подключается отдельно.</p></div>}
+      {step===8&&<div className="panel pad"><h3>Проверка</h3><div className="review"><b>{form.lastName} {form.firstName} {form.middleName}</b><span>{form.citizenship} · {form.birthDate||'дата рождения не указана'} · {form.gender||'пол не указан'}</span><span>Документ: {doc.documentNumber||'не указан'}</span><span>Въезд: {form.entryDate||'не указан'}</span><span>Виза до: {visa.endDate||'не указана'}</span><span>Регистрация до: {registration.endDate||'не указана'}</span><span>Страховка до: {form.insuranceEndDate||'не указана'}</span></div></div>}
+      <div className="modal-actions"><button type="button" onClick={()=>step>1?setStep(step-1):setWizard(false)}>Назад</button>{step<8?<button type="button" className="primary" onClick={()=>setStep(step+1)}>Далее →</button>:<button className="primary" disabled={saving}>{saving?'Сохранение...':editing?'Сохранить изменения':'Создать карточку'}</button>}</div></form></div></div>
   }
 
   function Detail(){
     if(!selected)return null
     const f=selected.foreigner
-    return <><button className="back" onClick={()=>setSelected(null)}>← К списку</button><div className="page-title-row"><div><h1>{f.last_name} {f.first_name} {f.middle_name||''}</h1><p className="muted">{f.citizenship} · {f.birth_date||'дата рождения не указана'}</p></div><button className="danger" onClick={()=>archive(f.id)}>Архивировать</button></div>
+    return <><button className="back" onClick={()=>setSelected(null)}>← К списку</button><div className="page-title-row"><div className="person-title">{f.photo_url?<img className="avatar" src={f.photo_url}/>:<div className="avatar placeholder">Фото</div>}<div><h1>{f.last_name} {f.first_name} {f.middle_name||''}</h1><p className="muted">{f.citizenship} · <span className="ok">Активен</span></p></div></div><div><button className="primary" onClick={startEdit}>Редактировать</button> <button onClick={()=>archive(f.id)}>Архивировать</button></div></div>{error&&<div className="error">{error}</div>}
+      <div className="tabs"><button className="active">Основная информация</button><button>Документы</button><button>Виза / Разрешение</button><button>Регистрация</button><button>История</button></div>
+      <div className="grid3">
+        <div className="panel pad"><h3>Личные данные</h3><p><b>ФИО:</b> {f.last_name} {f.first_name} {f.middle_name||''}</p><p><b>Гражданство:</b> {f.citizenship}</p><p><b>Дата рождения:</b> {f.birth_date||'—'}</p><p><b>Пол:</b> {f.gender||'—'}</p><p><b>Телефон:</b> {f.phone||'—'}</p><p><b>Email:</b> {f.email||'—'}</p></div>
+        <div className="panel pad"><h3>Документ</h3>{selected.documents[0]?<><p><b>Тип:</b> {selected.documents[0].document_type}</p><p><b>Номер:</b> {selected.documents[0].document_number}</p><p><b>Страна:</b> {selected.documents[0].issuing_country||'—'}</p><p><b>Выдан:</b> {selected.documents[0].issue_date||'—'}</p><p><b>Срок:</b> {selected.documents[0].expiry_date||'—'}</p></>:<p className="muted">Документ не указан</p>}</div>
+        <div className="panel pad"><h3>Пребывание в РБ</h3><p><b>Дата въезда:</b> {f.entry_date||'—'}</p><p><b>Основание:</b> {f.stay_basis||'—'}</p><p><b>Адрес:</b> {f.stay_address||'—'}</p></div>
+        <div className="panel pad"><h3>Виза / Разрешение</h3>{selected.visas.length?selected.visas.map((v:any)=><div className="record" key={v.id}><b>{v.visa_type} {v.visa_number?'№'+v.visa_number:''}</b><span>до {v.end_date} <button onClick={()=>deleteVisa(v.id)}>Удалить</button></span></div>):<p className="muted">Нет записей</p>}</div>
+        <div className="panel pad"><h3>Регистрация</h3>{selected.registrations.length?selected.registrations.map((r:any)=><div className="record" key={r.id}><b>{r.registration_type}</b><span>до {r.end_date}</span></div>):<p className="muted">Нет регистрации</p>}</div>
+        <div className="panel pad"><h3>Страхование</h3><p><b>Компания:</b> {f.insurance_company||'—'}</p><p><b>Полис:</b> {f.insurance_policy_number||'—'}</p><p><b>Действует до:</b> {f.insurance_end_date||'—'}</p></div>
+      </div>
       <div className="grid2">
-        <div className="panel pad"><h2>Персональные данные</h2><p>Телефон: {f.phone||'—'}</p><p>Email: {f.email||'—'}</p></div>
-        <div className="panel pad"><h2>Документы</h2>{selected.documents.length?selected.documents.map((d:any)=><div className="record" key={d.id}><b>{d.document_type} №{d.document_number}</b><span>до {d.expiry_date}</span></div>):<p className="muted">Документов нет</p>}</div>
-        <div className="panel pad"><h2>Добавить документ</h2><form onSubmit={saveDoc} className="stack"><input placeholder="Тип документа" value={doc.documentType} onChange={e=>setDoc({...doc,documentType:e.target.value})}/><input placeholder="Номер" required value={doc.documentNumber} onChange={e=>setDoc({...doc,documentNumber:e.target.value})}/><input placeholder="Страна выдачи" value={doc.issuingCountry} onChange={e=>setDoc({...doc,issuingCountry:e.target.value})}/><label>Дата выдачи<input type="date" value={doc.issueDate} onChange={e=>setDoc({...doc,issueDate:e.target.value})}/></label><label>Срок действия *<input type="date" required value={doc.expiryDate} onChange={e=>setDoc({...doc,expiryDate:e.target.value})}/></label><button className="primary">Сохранить документ</button></form></div>
-        <div className="panel pad"><h2>Визы и разрешения</h2>{selected.visas.length?selected.visas.map((v:any)=><div className="record" key={v.id}><b>{v.visa_type}{v.visa_number?' №'+v.visa_number:''}</b><span>до {v.end_date}</span></div>):<p className="muted">Виз нет</p>}<form onSubmit={saveVisa} className="stack"><h3>Добавить визу / разрешение</h3><input placeholder="Тип визы" required value={visa.visaType} onChange={e=>setVisa({...visa,visaType:e.target.value})}/><input placeholder="Номер" value={visa.visaNumber} onChange={e=>setVisa({...visa,visaNumber:e.target.value})}/><label>Начало<input type="date" value={visa.startDate} onChange={e=>setVisa({...visa,startDate:e.target.value})}/></label><label>Окончание *<input type="date" required value={visa.endDate} onChange={e=>setVisa({...visa,endDate:e.target.value})}/></label><textarea placeholder="Примечание" value={visa.notes} onChange={e=>setVisa({...visa,notes:e.target.value})}/><button className="primary">Сохранить визу</button></form></div>
+        <div className="panel pad"><h2>Добавить документ</h2><form onSubmit={saveDoc} className="stack"><input placeholder="Тип документа" value={doc.documentType} onChange={e=>setDoc({...doc,documentType:e.target.value})}/><input placeholder="Номер" required value={doc.documentNumber} onChange={e=>setDoc({...doc,documentNumber:e.target.value})}/><input placeholder="Страна выдачи" value={doc.issuingCountry} onChange={e=>setDoc({...doc,issuingCountry:e.target.value})}/><input type="date" value={doc.issueDate} onChange={e=>setDoc({...doc,issueDate:e.target.value})}/><input type="date" required value={doc.expiryDate} onChange={e=>setDoc({...doc,expiryDate:e.target.value})}/><button className="primary">Сохранить документ</button></form>{selected.documents.map((d:any)=><div className="record" key={d.id}><span>{d.document_type} №{d.document_number}</span><button onClick={()=>deleteDoc(d.id)}>Удалить</button></div>)}</div>
+        <div className="panel pad"><h2>Добавить регистрацию</h2><form onSubmit={saveRegistration} className="stack"><input placeholder="Тип" value={registration.registrationType} onChange={e=>setRegistration({...registration,registrationType:e.target.value})}/><input placeholder="Номер" value={registration.registrationNumber} onChange={e=>setRegistration({...registration,registrationNumber:e.target.value})}/><input type="date" value={registration.startDate} onChange={e=>setRegistration({...registration,startDate:e.target.value})}/><input type="date" required value={registration.endDate} onChange={e=>setRegistration({...registration,endDate:e.target.value})}/><button className="primary">Сохранить регистрацию</button></form></div>
       </div></>
   }
 
   function Section(){
     if(active==='Главная')return <Dashboard/>
     if(active==='Иностранцы')return <Foreigners/>
-    if(active==='Настройки')return <div className="panel pad"><h1>Настройки</h1><p>Роль: ORG_ADMIN</p><p className="muted">Параметры организации и доступа.</p></div>
-    if(active==='Контроль сроков')return <><h1>Контроль сроков</h1><p className="muted">Документы, визы и регистрации с ближайшими сроками.</p><div className="panel"><table><thead><tr><th>ФИО</th><th>Тип</th><th>Запись</th><th>Дата окончания</th><th>Статус</th></tr></thead><tbody>{(data.data||[]).map((x:any)=><tr key={x.item_type+x.item_name+x.end_date}><td>{x.last_name} {x.first_name}</td><td>{x.item_type}</td><td>{x.item_name}</td><td>{x.end_date}</td><td><span className={x.deadline_status==='EXPIRED'?'bad':'warn'}>{x.deadline_status==='EXPIRED'?'ПРОСРОЧЕНО':'СКОРО'}</span></td></tr>)}</tbody></table></div></>
-    if(active==='Документы')return <><h1>Документы</h1><p className="muted">Реестр документов и виз.</p><div className="grid2"><div className="panel pad"><h2>Документы</h2>{(data.documents||[]).map((d:any)=><div className="record" key={d.id}><b>{d.last_name} {d.first_name}</b><span>{d.document_type} №{d.document_number} · до {d.expiry_date}</span></div>)}</div><div className="panel pad"><h2>Визы</h2>{(data.visas||[]).map((v:any)=><div className="record" key={v.id}><b>{v.last_name} {v.first_name}</b><span>{v.visa_type} · до {v.end_date}</span></div>)}</div></div></>
-    if(active==='История')return <><h1>История</h1><p className="muted">Последние 100 операций.</p><div className="panel">{(data.data||[]).map((x:any)=><div className="history" key={x.id}><b>{x.action} · {x.entity_type}</b><span>{new Date(x.created_at).toLocaleString()} · {x.first_name||'система'}</span></div>)}</div></>
-    if(active==='Е-паслуга')return <><h1>Е-паслуга</h1><p className="muted">Заявки, подготовленные для передачи через официальный государственный сервис.</p><div className="panel">{(data.data||[]).length?(data.data||[]).map((x:any)=><div className="history" key={x.id}><b>{x.service_type}</b><span>{x.last_name||''} {x.first_name||''} · {x.status}</span></div>):<div className="pad">Заявок пока нет.</div>}</div></>
-    if(active==='Отчёты')return <div className="panel pad"><h1>Отчёты</h1><p>Сводка по организации</p><ul><li>Иностранцев: {data.foreigners}</li><li>Документов: {data.documents}</li><li>Активных виз: {data.visas}</li><li>Регистраций: {data.registrations}</li></ul></div>
+    if(active==='Настройки')return <div className="panel pad"><h1>Настройки</h1><h3>Система</h3><p>Пользователь: ORG_ADMIN</p><p className="muted">Разделы профиля, организации, роли, правила сроков, уведомления и безопасность готовы к подключению.</p></div>
+    if(active==='Контроль сроков')return <><h1>Контроль сроков</h1><p className="muted">Сроки регистрации, виз, документов и страхования.</p><div className="panel"><table><thead><tr><th>ФИО</th><th>Тип</th><th>Запись</th><th>Срок</th><th>Статус</th></tr></thead><tbody>{(data.data||[]).map((x:any)=><tr key={x.item_type+x.item_name+x.end_date}><td>{x.last_name} {x.first_name}</td><td>{x.item_type}</td><td>{x.item_name}</td><td>{x.end_date}</td><td><span className={x.deadline_status==='EXPIRED'?'bad':x.deadline_status==='WARNING'?'warn':'ok'}>{x.deadline_status==='EXPIRED'?'ПРОСРОЧЕНО':x.deadline_status==='WARNING'?'СКОРО':'В НОРМЕ'}</span></td></tr>)}</tbody></table></div></>
+    if(active==='Документы')return <><h1>Документы</h1><p className="muted">Хранилище и управление документами.</p><div className="grid2"><div className="panel pad"><h2>Документы</h2>{(data.documents||[]).map((d:any)=><div className="record" key={d.id}><b>{d.last_name} {d.first_name}</b><span>{d.document_type} №{d.document_number} · до {d.expiry_date}</span></div>)}</div><div className="panel pad"><h2>Визы</h2>{(data.visas||[]).map((v:any)=><div className="record" key={v.id}><b>{v.last_name} {v.first_name}</b><span>{v.visa_type} · до {v.end_date}</span></div>)}</div></div></>
+    if(active==='История')return <><h1>История действий</h1><p className="muted">Журнал операций пользователей.</p><div className="panel">{(data.data||[]).map((x:any)=><div className="history" key={x.id}><b>{x.action} · {x.entity_type}</b><span>{new Date(x.created_at).toLocaleString()} · {x.first_name||'система'}</span></div>)}</div></>
+    if(active==='Е-паслуга')return <><h1>Е-паслуга</h1><p className="muted">Регистрация иностранных граждан на территории Республики Беларусь.</p><div className="panel pad"><h2>Как это работает</h2><ol><li>Проверить право и данные.</li><li>Подготовить данные.</li><li>Перейти в официальный сервис.</li><li>Подтвердить данные и завершить операцию.</li><li>Сохранить номер/статус операции.</li></ol><p className="muted">Автоматическая отправка реализуется только через одобренный официальный API.</p></div><div className="panel">{(data.data||[]).length?(data.data||[]).map((x:any)=><div className="history" key={x.id}><b>{x.service_type}</b><span>{x.last_name||''} {x.first_name||''} · {x.status}</span></div>):<div className="pad">Заявок пока нет.</div>}</div></>
+    if(active==='Отчёты')return <div className="panel pad"><h1>Отчёты</h1><p>Сводка по организации</p><ul><li>Иностранцев: {data.foreigners}</li><li>Документов: {data.documents}</li><li>Активных виз: {data.visas}</li><li>Регистраций: {data.registrations}</li></ul><button>Экспорт Excel</button> <button>Экспорт PDF</button></div>
     return null
   }
 
-  return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null)}}>{x}</button>)}<button className="logout" onClick={()=>{localStorage.removeItem('token');setToken(null)}}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, гражданству..." value={q} onChange={e=>setQ(e.target.value)}/><span>Иванов А.А.</span></header>{selected?<Detail/>:<Section/>}</main></div>
+  return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null)}}>{x}</button>)}<button className="logout" onClick={()=>{localStorage.removeItem('token');setToken(null)}}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, документу, телефону..." value={q} onChange={e=>setQ(e.target.value)}/><span>Иванов А.А.</span></header>{selected?<Detail/>:<Section/>}</main></div>
 }
 createRoot(document.getElementById('root')!).render(<App/>)
