@@ -168,6 +168,6 @@ function App(){
     return null
   }
 
-  return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null)}}>{x}</button>)}<button className="logout" onClick={()=>{localStorage.removeItem('token');setToken(null)}}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, документу, телефону..." value={q} onChange={e=>setQ(e.target.value)}/><span>Иванов А.А.</span></header>{selected?Detail():Section()}</main></div>
+  return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null);setWizard(false)}}>{x}</button>)}<button className="logout" onClick={()=>{localStorage.removeItem('token');setToken(null);setSelected(null);setWizard(false)}}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, документу, телефону..." value={q} onChange={e=>setQ(e.target.value)}/><span>Иванов А.А.</span></header>{selected?Detail():Section()}{wizard&&Wizard()}</main></div>
 }
 createRoot(document.getElementById('root')!).render(<App/>)
