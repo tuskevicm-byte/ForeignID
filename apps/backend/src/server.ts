@@ -138,6 +138,19 @@ app.post('/api/v1/registrations',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OP
     [foreignerId,registrationType||'TEMPORARY_STAY',registrationNumber||null,startDate||null,endDate,status||'ACTIVE',governmentReference||null])
   await audit(req,'CREATE','REGISTRATION',r.rows[0].id,{registrationType,registrationNumber});res.status(201).json(r.rows[0])
 })
+app.patch('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
+  const {registrationType,registrationNumber,startDate,endDate,status,governmentReference}=req.body||{}
+  const r=await query(`UPDATE registrations r SET registration_type=COALESCE($1,r.registration_type),registration_number=$2,start_date=$3,end_date=COALESCE($4,r.end_date),status=COALESCE($5,r.status),government_reference=$6
+    FROM foreigners f WHERE r.id=$7 AND r.foreigner_id=f.id AND f.organization_id=$8 RETURNING r.*`,
+    [registrationType,registrationNumber||null,startDate||null,endDate,status||null,governmentReference||null,req.params.id,req.user.organization_id])
+  if(!r.rowCount)return res.status(404).json({message:'Регистрация не найдена'})
+  await audit(req,'UPDATE','REGISTRATION',req.params.id,{registrationType,registrationNumber});res.json(r.rows[0])
+})
+app.delete('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
+  const r=await query('DELETE FROM registrations r USING foreigners f WHERE r.id=$1 AND r.foreigner_id=f.id AND f.organization_id=$2 RETURNING r.id',[req.params.id,req.user.organization_id])
+  if(!r.rowCount)return res.status(404).json({message:'Регистрация не найдена'})
+  await audit(req,'DELETE','REGISTRATION',req.params.id);res.json({ok:true})
+})
 app.patch('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {documentType,documentNumber,issuingCountry,issueDate,expiryDate}=req.body||{}
   const r=await query(`UPDATE identity_documents d SET document_type=COALESCE($1,d.document_type),document_number=COALESCE($2,d.document_number),
