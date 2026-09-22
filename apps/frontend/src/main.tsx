@@ -78,9 +78,21 @@ function App(){
         const created=await api('/foreigners',{method:'POST',body:JSON.stringify(payload)})
         foreignerId=created.id
       }
-      if(doc.documentNumber&&doc.expiryDate)await api('/documents',{method:'POST',body:JSON.stringify({...doc,foreignerId})})
-      if(visa.visaType&&visa.endDate)await api('/visas',{method:'POST',body:JSON.stringify({...visa,foreignerId})})
-      if(registration.endDate)await api('/registrations',{method:'POST',body:JSON.stringify({...registration,foreignerId})})
+      if(doc.documentNumber&&doc.expiryDate){
+        const path=editingDocId?'/documents/'+editingDocId:'/documents'
+        const method=editingDocId?'PATCH':'POST'
+        await api(path,{method,body:JSON.stringify(editingDocId?doc:{...doc,foreignerId})})
+      }
+      if(visa.visaType&&visa.endDate){
+        const path=editingVisaId?'/visas/'+editingVisaId:'/visas'
+        const method=editingVisaId?'PATCH':'POST'
+        await api(path,{method,body:JSON.stringify(editingVisaId?visa:{...visa,foreignerId})})
+      }
+      if(registration.endDate){
+        const path=editingRegistrationId?'/registrations/'+editingRegistrationId:'/registrations'
+        const method=editingRegistrationId?'PATCH':'POST'
+        await api(path,{method,body:JSON.stringify(editingRegistrationId?registration:{...registration,foreignerId})})
+      }
       setWizard(false);setEditing(false);setEditingDocId(null);setEditingVisaId(null);setEditingRegistrationId(null);await loadForeigners()
       if(editing)await openForeigner({id:selected.foreigner.id})
       else await openForeigner({id:foreignerId})
@@ -160,12 +172,13 @@ function App(){
         <div className="panel pad"><h3>Личные данные</h3><p><b>ФИО:</b> {f.last_name} {f.first_name} {f.middle_name||''}</p><p><b>Гражданство:</b> {f.citizenship}</p><p><b>Дата рождения:</b> {f.birth_date||'—'}</p><p><b>Пол:</b> {f.gender||'—'}</p><p><b>Телефон:</b> {f.phone||'—'}</p><p><b>Email:</b> {f.email||'—'}</p></div>
         <div className="panel pad"><h3>Документ</h3>{selected.documents[0]?<><p><b>Тип:</b> {selected.documents[0].document_type}</p><p><b>Номер:</b> {selected.documents[0].document_number}</p><p><b>Страна:</b> {selected.documents[0].issuing_country||'—'}</p><p><b>Выдан:</b> {selected.documents[0].issue_date||'—'}</p><p><b>Срок:</b> {selected.documents[0].expiry_date||'—'}</p></>:<p className="muted">Документ не указан</p>}</div>
         <div className="panel pad"><h3>Пребывание в РБ</h3><p><b>Дата въезда:</b> {f.entry_date||'—'}</p><p><b>Основание:</b> {f.stay_basis||'—'}</p><p><b>Адрес:</b> {f.stay_address||'—'}</p></div>
-        <div className="panel pad"><h3>Виза / Разрешение</h3>{selected.visas.length?selected.visas.map((v:any)=><div className="record" key={v.id}><b>{v.visa_type} {v.visa_number?'№'+v.visa_number:''}</b><span>до {v.end_date} <button onClick={()=>deleteVisa(v.id)}>Удалить</button></span></div>):<p className="muted">Нет записей</p>}</div>
+        <div className="panel pad"><h3>Виза / Разрешение</h3>{selected.visas.length?selected.visas.map((v:any)=><div className="record" key={v.id}><b>{v.visa_type} {v.visa_number?'№'+v.visa_number:''}</b><span>до {v.end_date} <button onClick={()=>{setEditingVisaId(v.id);setVisa({visaType:v.visa_type||'',visaNumber:v.visa_number||'',issueDate:v.issue_date||'',startDate:v.start_date||'',endDate:v.end_date||'',notes:v.notes||''});setError('')}}>Редактировать</button> <button onClick={()=>deleteVisa(v.id)}>Удалить</button></span></div>)):<p className="muted">Нет записей</p>}</div>
         <div className="panel pad"><h3>Регистрация</h3>{selected.registrations.length?selected.registrations.map((r:any)=><div className="record" key={r.id}><b>{r.registration_type}</b><span>до {r.end_date} <button onClick={()=>editRegistration(r)}>Редактировать</button> <button onClick={()=>deleteRegistration(r.id)}>Удалить</button></span></div>):<p className="muted">Нет регистрации</p>}</div>
         <div className="panel pad"><h3>Страхование</h3><p><b>Компания:</b> {f.insurance_company||'—'}</p><p><b>Полис:</b> {f.insurance_policy_number||'—'}</p><p><b>Действует до:</b> {f.insurance_end_date||'—'}</p></div>
       </div>
       <div className="grid2">
         <div className="panel pad"><h2>{editingDocId?'Редактировать документ':'Добавить документ'}</h2><form onSubmit={saveDoc} className="stack"><input placeholder="Тип документа" value={doc.documentType} onChange={e=>setDoc({...doc,documentType:e.target.value})}/><input placeholder="Номер" required value={doc.documentNumber} onChange={e=>setDoc({...doc,documentNumber:e.target.value})}/><input placeholder="Страна выдачи" value={doc.issuingCountry} onChange={e=>setDoc({...doc,issuingCountry:e.target.value})}/><input type="date" value={doc.issueDate} onChange={e=>setDoc({...doc,issueDate:e.target.value})}/><input type="date" required value={doc.expiryDate} onChange={e=>setDoc({...doc,expiryDate:e.target.value})}/><button className="primary">{editingDocId?'Сохранить изменения':'Сохранить документ'}</button></form>{selected.documents.map((d:any)=><div className="record" key={d.id}><span>{d.document_type} №{d.document_number}</span><span><button type="button" onClick={()=>editDoc(d)}>Редактировать</button> <button type="button" onClick={()=>deleteDoc(d.id)}>Удалить</button></span></div>)}</div>
+        <div className="panel pad"><h2>{editingVisaId?'Редактировать визу':'Добавить визу'} </h2><form onSubmit={saveVisa} className="stack"><input placeholder="Тип визы" required value={visa.visaType} onChange={e=>setVisa({...visa,visaType:e.target.value})}/><input placeholder="Номер" value={visa.visaNumber} onChange={e=>setVisa({...visa,visaNumber:e.target.value})}/><input type="date" value={visa.issueDate} onChange={e=>setVisa({...visa,issueDate:e.target.value})}/><input type="date" value={visa.startDate} onChange={e=>setVisa({...visa,startDate:e.target.value})}/><input type="date" required value={visa.endDate} onChange={e=>setVisa({...visa,endDate:e.target.value})}/><textarea placeholder="Примечание" value={visa.notes} onChange={e=>setVisa({...visa,notes:e.target.value})}/><button className="primary">{editingVisaId?'Сохранить изменения':'Сохранить визу'}</button></form></div>
         <div className="panel pad"><h2>{editingRegistrationId?'Редактировать регистрацию':'Добавить регистрацию'}</h2><form onSubmit={saveRegistration} className="stack"><input placeholder="Тип" value={registration.registrationType} onChange={e=>setRegistration({...registration,registrationType:e.target.value})}/><input placeholder="Номер" value={registration.registrationNumber} onChange={e=>setRegistration({...registration,registrationNumber:e.target.value})}/><input type="date" value={registration.startDate} onChange={e=>setRegistration({...registration,startDate:e.target.value})}/><input type="date" required value={registration.endDate} onChange={e=>setRegistration({...registration,endDate:e.target.value})}/><button className="primary">{editingRegistrationId?'Сохранить изменения':'Сохранить регистрацию'}</button></form></div>
       </div></>
   }
