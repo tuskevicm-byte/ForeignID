@@ -112,7 +112,7 @@ function App(){
   function Dashboard(){return <><h1>Главная</h1><p className="muted">Общая информация по иностранным гражданам</p><div className="cards">{stats(data.foreigners,'Всего иностранцев')}{stats(data.visas,'Активные')}{stats(0,'Срок заканчивается')}{stats(0,'Просроченные')}{stats(data.registrations,'Регистрации')}</div><div className="grid2"><div className="panel pad"><h2>Что контролируется</h2><p>Документы, визы и разрешения, регистрации, въезд, страхование и история действий.</p></div><div className="panel pad"><h2>Последние действия</h2><p>Откройте раздел «История» для полного журнала операций.</p></div></div></>}
 
   function Foreigners(){
-    return <><div className="page-title-row"><div><h1>Иностранцы</h1><p className="muted">Список всех иностранных граждан</p></div><button className="primary" onClick={startAdd}>+ Добавить</button></div>{error&&<div className="error">{error}</div>}<div className="panel"><table><thead><tr><th>ФИО</th><th>Гражданство</th><th>Документ</th><th>Виза / Разрешение</th><th>Регистрация</th><th>Статус</th><th>Действия</th></tr></thead><tbody>{foreigners.filter(x=>x.status!=='ARCHIVED').map(x=><tr key={x.id}><td><button className="link" onClick={()=>openForeigner(x)}>{x.last_name} {x.first_name} {x.middle_name||''}</button></td><td>{x.citizenship}</td><td>{x.document?.document_number||'—'}</td><td>{x.visa?.end_date||'—'}</td><td>{x.registration?.end_date||'—'}</td><td><span className="ok">Активен</span></td><td><button onClick={()=>openForeigner(x)}>Открыть</button></td></tr>)}</tbody></table></div>{wizard&&<Wizard/>}</>
+    return <><div className="page-title-row"><div><h1>Иностранцы</h1><p className="muted">Список всех иностранных граждан</p></div><button className="primary" onClick={startAdd}>+ Добавить</button></div>{error&&<div className="error">{error}</div>}<div className="panel"><table><thead><tr><th>ФИО</th><th>Гражданство</th><th>Документ</th><th>Виза / Разрешение</th><th>Регистрация</th><th>Статус</th><th>Действия</th></tr></thead><tbody>{foreigners.filter(x=>x.status!=='ARCHIVED').map(x=><tr key={x.id}><td><button className="link" onClick={()=>openForeigner(x)}>{x.last_name} {x.first_name} {x.middle_name||''}</button></td><td>{x.citizenship}</td><td>{x.document?.document_number||'—'}</td><td>{x.visa?.end_date||'—'}</td><td>{x.registration?.end_date||'—'}</td><td><span className="ok">Активен</span></td><td><button onClick={()=>openForeigner(x)}>Открыть</button></td></tr>)}</tbody></table></div>{wizard&&Wizard()}</>
   }
 
   function Wizard(){
@@ -150,8 +150,8 @@ function App(){
   }
 
   function Section(){
-    if(active==='Главная')return <Dashboard/>
-    if(active==='Иностранцы')return <Foreigners/>
+    if(active==='Главная')return Dashboard()
+    if(active==='Иностранцы')return Foreigners()
     if(active==='Настройки')return <div className="panel pad"><h1>Настройки</h1><h3>Система</h3><p>Пользователь: ORG_ADMIN</p><p className="muted">Разделы профиля, организации, роли, правила сроков, уведомления и безопасность готовы к подключению.</p></div>
     if(active==='Контроль сроков')return <><h1>Контроль сроков</h1><p className="muted">Сроки регистрации, виз, документов и страхования.</p><div className="panel"><table><thead><tr><th>ФИО</th><th>Тип</th><th>Запись</th><th>Срок</th><th>Статус</th></tr></thead><tbody>{(data.data||[]).map((x:any)=><tr key={x.item_type+x.item_name+x.end_date}><td>{x.last_name} {x.first_name}</td><td>{x.item_type}</td><td>{x.item_name}</td><td>{x.end_date}</td><td><span className={x.deadline_status==='EXPIRED'?'bad':x.deadline_status==='WARNING'?'warn':'ok'}>{x.deadline_status==='EXPIRED'?'ПРОСРОЧЕНО':x.deadline_status==='WARNING'?'СКОРО':'В НОРМЕ'}</span></td></tr>)}</tbody></table></div></>
     if(active==='Документы')return <><h1>Документы</h1><p className="muted">Хранилище и управление документами.</p><div className="grid2"><div className="panel pad"><h2>Документы</h2>{(data.documents||[]).map((d:any)=><div className="record" key={d.id}><b>{d.last_name} {d.first_name}</b><span>{d.document_type} №{d.document_number} · до {d.expiry_date}</span></div>)}</div><div className="panel pad"><h2>Визы</h2>{(data.visas||[]).map((v:any)=><div className="record" key={v.id}><b>{v.last_name} {v.first_name}</b><span>{v.visa_type} · до {v.end_date}</span></div>)}</div></div></>
@@ -161,6 +161,6 @@ function App(){
     return null
   }
 
-  return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null)}}>{x}</button>)}<button className="logout" onClick={()=>{localStorage.removeItem('token');setToken(null)}}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, документу, телефону..." value={q} onChange={e=>setQ(e.target.value)}/><span>Иванов А.А.</span></header>{selected?<Detail/>:<Section/>}</main></div>
+  return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null)}}>{x}</button>)}<button className="logout" onClick={()=>{localStorage.removeItem('token');setToken(null)}}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, документу, телефону..." value={q} onChange={e=>setQ(e.target.value)}/><span>Иванов А.А.</span></header>{selected?Detail():Section()}</main></div>
 }
 createRoot(document.getElementById('root')!).render(<App/>)
