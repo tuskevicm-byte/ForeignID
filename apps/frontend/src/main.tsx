@@ -30,7 +30,9 @@ function App(){
   const [savingFile,setSavingFile]=React.useState(false)
   const [detailTab,setDetailTab]=React.useState('Основная информация')
   const [serviceType,setServiceType]=React.useState('Регистрация иностранного гражданина')
-  const [creatingApplication,setCreatingApplication]=React.useState(false)\n  const [currentUser,setCurrentUser]=React.useState<any>(null)\n  const [applicationForeignerId,setApplicationForeignerId]=React.useState('')
+  const [creatingApplication,setCreatingApplication]=React.useState(false)
+  const [currentUser,setCurrentUser]=React.useState<any>(null)
+  const [applicationForeignerId,setApplicationForeignerId]=React.useState('')
 
   async function api(path:string,opts:any={}){
     const headers:any={'Content-Type':'application/json',...(opts.headers||{})}
@@ -72,7 +74,11 @@ function App(){
       else if(active==='Е-паслуга')setData(await api('/applications'))
     }catch(e:any){setError(e.message)}
   }
-  React.useEffect(()=>{\n    if(!token){setCurrentUser(null);return}\n    api('/auth/me').then(d=>setCurrentUser(d.user)).catch(()=>{})\n  },[token])\n  React.useEffect(()=>{loadForeigners()},[token,q])
+  React.useEffect(()=>{
+    if(!token){setCurrentUser(null);return}
+    api('/auth/me').then(d=>setCurrentUser(d.user)).catch(()=>{})
+  },[token])
+  React.useEffect(()=>{loadForeigners()},[token,q])
   React.useEffect(()=>{loadSection()},[token,active])
 
   function startAdd(){setDetailTab('Основная информация');setForm({...blank});setDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''});setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});setRegistration({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''});setStep(1);setEditing(false);setEditingDocId(null);setEditingVisaId(null);setEditingRegistrationId(null);setWizard(true);setError('')}
