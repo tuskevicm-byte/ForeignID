@@ -58,7 +58,7 @@ function App(){
   async function loadSection(){
     if(!token)return
     try{
-      if(active==='Главная'||active==='Отчёты')setData(await api('/dashboard'))
+      if(active==='Главная'||active==='Отчёты'){const [d,deadlines]=await Promise.all([api('/dashboard'),api('/deadlines')]);setData({...d,deadlines:deadlines.data||[]})}
       else if(active==='Контроль сроков')setData(await api('/deadlines'))
       else if(active==='Документы'){const [d,v]=await Promise.all([api('/documents'),api('/visas')]);setData({documents:d.data||[],visas:v.data||[]})}
       else if(active==='История')setData(await api('/history'))
