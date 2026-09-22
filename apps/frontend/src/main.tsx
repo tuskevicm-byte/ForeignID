@@ -9,6 +9,7 @@ function el(type:any, props:any, ...children:any[]) {
 }
 
 function App() {
+  // Navigation update: 2026-09-22
   const [token, setToken] = React.useState(localStorage.getItem('token'))
   const [email, setEmail] = React.useState('admin@example.local')
   const [password, setPassword] = React.useState('ChangeMe-123!')
