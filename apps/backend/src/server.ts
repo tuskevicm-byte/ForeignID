@@ -203,7 +203,7 @@ app.get('/api/v1/deadlines',requireAuth,async(req:AuthRequest,res)=>{
     UNION ALL
     SELECT f.id,f.first_name,f.last_name,'Страховка','Страховой полис',f.insurance_end_date FROM foreigners f WHERE f.organization_id=$1 AND f.status<>'ARCHIVED' AND f.insurance_end_date IS NOT NULL
   ) x WHERE end_date IS NOT NULL ORDER BY end_date ASC`,[req.user.organization_id])
-  res.json({data:r.rows.map((x:any)=>({...x,deadline_status:new Date(x.end_date)<new Date()?'EXPIRED':Math.ceil((new Date(x.end_date).getTime()-Date.now())/86400000)<=30?'WARNING':'NORMAL'}))})
+  res.json({data:r.rows.map((x:any)=>{const daysLeft=Math.ceil((new Date(x.end_date).getTime()-Date.now())/86400000);return {...x,days_left:daysLeft,deadline_status:daysLeft<0?'EXPIRED':daysLeft<=30?'WARNING':'NORMAL',deadline_level:daysLeft<0?'EXPIRED':daysLeft<=1?'1_DAY':daysLeft<=3?'3_DAYS':daysLeft<=7?'7_DAYS':daysLeft<=14?'14_DAYS':daysLeft<=30?'30_DAYS':'NORMAL'}})})
 })
 
 app.get('/api/v1/diagnostics/visa-distribution',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
