@@ -61,10 +61,19 @@ function App(){
     e.preventDefault();setSaving(true);setError('')
     try{
       const payload={...form}
-      if(editing)await api('/foreigners/'+selected.foreigner.id,{method:'PATCH',body:JSON.stringify(payload)})
-      else await api('/foreigners',{method:'POST',body:JSON.stringify(payload)})
+      let foreignerId=editing?selected.foreigner.id:''
+      if(editing){
+        await api('/foreigners/'+selected.foreigner.id,{method:'PATCH',body:JSON.stringify(payload)})
+      }else{
+        const created=await api('/foreigners',{method:'POST',body:JSON.stringify(payload)})
+        foreignerId=created.id
+      }
+      if(doc.documentNumber&&doc.expiryDate)await api('/documents',{method:'POST',body:JSON.stringify({...doc,foreignerId})})
+      if(visa.visaType&&visa.endDate)await api('/visas',{method:'POST',body:JSON.stringify({...visa,foreignerId})})
+      if(registration.endDate)await api('/registrations',{method:'POST',body:JSON.stringify({...registration,foreignerId})})
       setWizard(false);setEditing(false);await loadForeigners()
       if(editing)await openForeigner({id:selected.foreigner.id})
+      else await openForeigner({id:foreignerId})
     }catch(e:any){setError(e.message)}finally{setSaving(false)}
   }
   async function openForeigner(x:any){try{setSelected(await api('/foreigners/'+x.id))}catch(e:any){setError(e.message)}}
