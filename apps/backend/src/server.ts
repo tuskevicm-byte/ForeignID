@@ -199,7 +199,7 @@ app.get('/api/v1/deadlines',requireAuth,async(req:AuthRequest,res)=>{
     UNION ALL
     SELECT f.id,f.first_name,f.last_name,'Виза',v.visa_type,v.end_date FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED'
     UNION ALL
-    SELECT f.id,f.first_name,f.last_name,'Регистрация',r.registration_type,r.end_date FROM registrations r JOIN foreigners f ON f.id=r.foreigner_id WHERE f.organization_id=$1
+    SELECT f.id,f.first_name,f.last_name,'Регистрация',r.registration_type,r.end_date FROM registrations r JOIN foreigners f ON f.id=r.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED'
     UNION ALL
     SELECT f.id,f.first_name,f.last_name,'Страховка','Страховой полис',f.insurance_end_date FROM foreigners f WHERE f.organization_id=$1 AND f.status<>'ARCHIVED' AND f.insurance_end_date IS NOT NULL
   ) x WHERE end_date IS NOT NULL ORDER BY end_date ASC`,[req.user.organization_id])
