@@ -47,7 +47,7 @@ const run=async()=>{
     const endOffset=i<5 ? -(i+1) : i<15 ? 5 : 60
     await query(
       `INSERT INTO visas(foreigner_id,visa_type,visa_number,issue_date,start_date,end_date,status,notes)
-       SELECT $1,'WORK', $2, CURRENT_DATE-30, CURRENT_DATE-29, CURRENT_DATE+$3,'ACTIVE','Demo data'
+       SELECT $1,'WORK', $2, CURRENT_DATE-30, CURRENT_DATE-29, CURRENT_DATE+($3::int),'ACTIVE','Demo data'
        WHERE NOT EXISTS (SELECT 1 FROM visas WHERE foreigner_id=$1)`,
       [foreignerId,`DEMO-VISA-${i+1}`,endOffset]
     )
