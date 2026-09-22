@@ -198,6 +198,33 @@ app.get('/api/v1/deadlines',requireAuth,async(req:AuthRequest,res)=>{
   res.json({data:r.rows.map((x:any)=>({...x,deadline_status:new Date(x.end_date)<new Date()?'EXPIRED':Math.ceil((new Date(x.end_date).getTime()-Date.now())/86400000)<=7?'WARNING':'NORMAL'}))})
 })
 
+app.get('/api/v1/diagnostics/visa-distribution',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
+  const r=await query(`SELECT
+    count(DISTINCT f.id)::int AS foreigners,
+    count(v.id)::int AS visas,
+    count(*) FILTER (WHERE v.end_date < CURRENT_DATE)::int AS expired,
+    count(*) FILTER (WHERE v.end_date = CURRENT_DATE + 5)::int AS expiring_in_5_days,
+    count(*) FILTER (WHERE v.end_date > CURRENT_DATE + 5)::int AS normal
+    FROM foreigners f
+    LEFT JOIN visas v ON v.foreigner_id=f.id
+    WHERE f.organization_id=$1
+      AND f.status <> 'ARCHIVED'
+      AND f.email LIKE 'demo%@foreignid.local'`,[req.user.organization_id])
+  const row=r.rows[0]
+  res.json({
+    ok:true,
+    scope:'organization',
+    demoPattern:'demo%@foreignid.local',
+    distribution:{
+      foreigners:Number(row.foreigners)||0,
+      visas:Number(row.visas)||0,
+      expired:Number(row.expired)||0,
+      expiringIn5Days:Number(row.expiring_in_5_days)||0,
+      normal:Number(row.normal)||0
+    }
+  })
+})
+
 app.get('/api/v1/history',requireAuth,async(req:AuthRequest,res)=>{
   const r=await query(`SELECT a.*,u.first_name,u.last_name FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id
     WHERE a.organization_id=$1 ORDER BY a.created_at DESC LIMIT 100`,[req.user.organization_id]);res.json({data:r.rows})
