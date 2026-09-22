@@ -186,6 +186,11 @@ app.post('/api/v1/files',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR')
   const r=await query('INSERT INTO foreigner_files(foreigner_id,file_name,file_url,file_type,file_size) VALUES($1,$2,$3,$4,$5) RETURNING *',[foreignerId,fileName,fileUrl,fileType||null,fileSize||null])
   await audit(req,'CREATE','FILE',r.rows[0].id,{fileName});res.status(201).json(r.rows[0])
 })
+app.delete('/api/v1/files/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
+  const r=await query('DELETE FROM foreigner_files ff USING foreigners f WHERE ff.id=$1 AND ff.foreigner_id=f.id AND f.organization_id=$2 RETURNING ff.id,ff.file_name',[req.params.id,req.user.organization_id])
+  if(!r.rowCount)return res.status(404).json({message:'Файл не найден'})
+  await audit(req,'DELETE','FILE',req.params.id,{fileName:r.rows[0].file_name});res.json({ok:true})
+})
 
 app.get('/api/v1/deadlines',requireAuth,async(req:AuthRequest,res)=>{
   const r=await query(`SELECT * FROM (
