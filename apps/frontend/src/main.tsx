@@ -81,13 +81,6 @@ function App(){
     e.preventDefault();setSaving(true);setError('')
     try{
       const payload={...form}
-      let foreignerId=editing?selected.foreigner.id:''
-      if(editing){
-        await api('/foreigners/'+selected.foreigner.id,{method:'PATCH',body:JSON.stringify(payload)})
-      }else{
-        const created=await api('/foreigners',{method:'POST',body:JSON.stringify(payload)})
-        foreignerId=created.id
-      }
       const documentStarted=Boolean(doc.documentNumber||doc.issuingCountry||doc.issueDate||doc.expiryDate)
       const visaStarted=Boolean(visa.visaNumber||visa.issueDate||visa.startDate||visa.endDate||visa.notes)
       const registrationStarted=Boolean(registration.registrationNumber||registration.startDate||registration.endDate||registration.governmentReference)
@@ -95,6 +88,13 @@ function App(){
       if(documentStarted&&!doc.expiryDate)throw new Error('Укажите срок действия документа.')
       if(visaStarted&&(!visa.visaType||!visa.endDate))throw new Error('Для визы укажите тип и дату окончания.')
       if(registrationStarted&&!registration.endDate)throw new Error('Для регистрации укажите дату окончания.')
+      let foreignerId=editing?selected.foreigner.id:''
+      if(editing){
+        await api('/foreigners/'+selected.foreigner.id,{method:'PATCH',body:JSON.stringify(payload)})
+      }else{
+        const created=await api('/foreigners',{method:'POST',body:JSON.stringify(payload)})
+        foreignerId=created.id
+      }
       if(documentStarted){
         const path=editingDocId?'/documents/'+editingDocId:'/documents'
         const method=editingDocId?'PATCH':'POST'
