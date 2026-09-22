@@ -176,7 +176,9 @@ function App(){
 
   if(!token)return <div className="login"><form onSubmit={login}><h1>ForeignID</h1><p>Система учета иностранных граждан</p><input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email"/><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Пароль"/>{error&&<div className="error">{error}</div>}<button className="primary">Войти</button><small>Демо: admin@example.local / ChangeMe-123!</small></form></div>
 
-  const nav=['Главная','Иностранцы','Контроль сроков','Е-паслуга','Документы','Отчёты','История','Настройки']\n  const canWrite=['SUPER_ADMIN','ORG_ADMIN','OPERATOR'].includes(currentUser?.role)\n  const canDelete=['SUPER_ADMIN','ORG_ADMIN'].includes(currentUser?.role)
+  const nav=['Главная','Иностранцы','Контроль сроков','Е-паслуга','Документы','Отчёты','История','Настройки']
+  const canWrite=['SUPER_ADMIN','ORG_ADMIN','OPERATOR'].includes(currentUser?.role)
+  const canDelete=['SUPER_ADMIN','ORG_ADMIN'].includes(currentUser?.role)
   const stats=(n:any,l:string)=><div className="stat"><b>{n??0}</b><span>{l}</span></div>
 
   function Dashboard(){const deadlines=data.deadlines||[];const warning=deadlines.filter((x:any)=>x.deadline_status==='WARNING').length;const expired=deadlines.filter((x:any)=>x.deadline_status==='EXPIRED').length;return <><h1>Главная</h1><p className="muted">Общая информация по иностранным гражданам</p><div className="cards">{stats(data.foreigners,'Всего иностранцев')}{stats(data.visas,'Активные')}{stats(warning,'Срок заканчивается')}{stats(expired,'Просроченные')}{stats(data.registrations,'Регистрации')}</div><div className="grid2"><div className="panel pad"><h2>Что контролируется</h2><p>Документы, визы и разрешения, регистрации, въезд, страхование и история действий.</p></div><div className="panel pad"><h2>Ближайшие сроки</h2>{deadlines.filter((x:any)=>x.deadline_status!=='NORMAL').slice(0,5).map((x:any)=><p key={x.foreigner_id+x.item_type+x.end_date}><b>{x.last_name} {x.first_name}</b> · {x.item_type} · {x.end_date}</p>)}{!warning&&!expired&&<p className="muted">Критичных сроков нет.</p>}</div></div></>}
