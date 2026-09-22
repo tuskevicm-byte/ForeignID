@@ -9,7 +9,6 @@ function el(type:any, props:any, ...children:any[]) {
 }
 
 function App() {
-  // Navigation update: 2026-09-22
   const [token, setToken] = React.useState(localStorage.getItem('token'))
   const [email, setEmail] = React.useState('admin@example.local')
   const [password, setPassword] = React.useState('ChangeMe-123!')
@@ -17,6 +16,11 @@ function App() {
   const [q, setQ] = React.useState('')
   const [error, setError] = React.useState('')
   const [active, setActive] = React.useState('Иностранцы')
+  const [showCreate, setShowCreate] = React.useState(false)
+  const [saving, setSaving] = React.useState(false)
+  const [form, setForm] = React.useState({
+    firstName:'', middleName:'', lastName:'', citizenship:'', birthDate:'', phone:'', email:''
+  })
 
   async function login(e:any) {
     e.preventDefault()
@@ -33,13 +37,47 @@ function App() {
   }
 
   async function load() {
+    if (!token) return
     try {
       const r = await fetch(API + '/foreigners?q=' + encodeURIComponent(q), {headers:{Authorization:'Bearer ' + token}})
-      if (r.ok) { const d = await r.json(); setForeigners(d.data || []) }
-    } catch {}
+      const d = await r.json()
+      if (r.ok) setForeigners(d.data || [])
+      else if (r.status === 401) { localStorage.removeItem('token'); setToken(null) }
+    } catch {
+      setError('Не удалось загрузить список иностранцев')
+    }
   }
 
   React.useEffect(() => { if (token) load() }, [token, q])
+
+  function setField(name:string, value:string) {
+    setForm(prev => ({...prev, [name]:value}))
+  }
+
+  async function createForeigner(e:any) {
+    e.preventDefault()
+    setError('')
+    setSaving(true)
+    try {
+      const r = await fetch(API + '/foreigners', {
+        method:'POST',
+        headers:{'Content-Type':'application/json', Authorization:'Bearer ' + token},
+        body:JSON.stringify(form)
+      })
+      const d = await r.json()
+      if (!r.ok) {
+        setError(d.message || 'Не удалось создать запись')
+        return
+      }
+      setForm({firstName:'',middleName:'',lastName:'',citizenship:'',birthDate:'',phone:'',email:''})
+      setShowCreate(false)
+      await load()
+    } catch {
+      setError('Не удалось подключиться к серверу')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (!token) {
     return el('div',{className:'login'},
@@ -60,8 +98,14 @@ function App() {
   function renderContent() {
     if (active === 'Иностранцы') {
       return el('div',null,
-        el('h1',null,'Иностранцы'),
-        el('p',{className:'muted'},'Данные загружаются из PostgreSQL через защищенный API'),
+        el('div',{className:'page-title-row'},
+          el('div',null,
+            el('h1',null,'Иностранцы'),
+            el('p',{className:'muted'},'Данные загружаются из PostgreSQL через защищенный API')
+          ),
+          el('button',{className:'primary',onClick:()=>{setError('');setShowCreate(true)}},'+ Добавить иностранца')
+        ),
+        error && el('div',{className:'error page-error'},error),
         el('div',{className:'cards'},
           el('div',null,el('b',null,String(foreigners.length)),el('span',null,'Записей')),
           el('div',null,el('b',null,'Контроль'),el('span',null,'Сроков включен')),
@@ -74,8 +118,31 @@ function App() {
               el('td',null,x.last_name+' '+x.first_name+' '+(x.middle_name||'')),
               el('td',null,x.citizenship),
               el('td',null,x.document_number||'—'),
-              el('td',null,el('span',{className:'ok'},x.status))
+              el('td',null,el('span',{className:'ok'},x.status||'ACTIVE'))
             )))
+          )
+        ),
+        showCreate && el('div',{className:'modal-backdrop'},
+          el('div',{className:'modal'},
+            el('div',{className:'modal-header'},
+              el('div',null,el('h2',null,'Добавить иностранца'),el('p',{className:'muted'},'Обязательные поля отмечены *')),
+              el('button',{className:'modal-close',type:'button',onClick:()=>setShowCreate(false)},'×')
+            ),
+            el('form',{onSubmit:createForeigner},
+              el('div',{className:'form-grid'},
+                el('label',null,'Имя *',el('input',{required:true,value:form.firstName,onChange:(e:any)=>setField('firstName',e.target.value),placeholder:'Иван'})),
+                el('label',null,'Фамилия *',el('input',{required:true,value:form.lastName,onChange:(e:any)=>setField('lastName',e.target.value),placeholder:'Иванов'})),
+                el('label',null,'Отчество',el('input',{value:form.middleName,onChange:(e:any)=>setField('middleName',e.target.value),placeholder:'Иванович'})),
+                el('label',null,'Гражданство *',el('input',{required:true,value:form.citizenship,onChange:(e:any)=>setField('citizenship',e.target.value),placeholder:'Украина'})),
+                el('label',null,'Дата рождения',el('input',{type:'date',value:form.birthDate,onChange:(e:any)=>setField('birthDate',e.target.value)})),
+                el('label',null,'Телефон',el('input',{value:form.phone,onChange:(e:any)=>setField('phone',e.target.value),placeholder:'+1 ...'})),
+                el('label',{className:'full'},'Email',el('input',{type:'email',value:form.email,onChange:(e:any)=>setField('email',e.target.value),placeholder:'name@example.com'}))
+              ),
+              el('div',{className:'modal-actions'},
+                el('button',{type:'button',onClick:()=>setShowCreate(false)},'Отмена'),
+                el('button',{type:'submit',className:'primary',disabled:saving},saving?'Сохранение...':'Сохранить')
+              )
+            )
           )
         )
       )
