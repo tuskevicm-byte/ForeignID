@@ -36,9 +36,9 @@ app.get('/api/v1/auth/me',requireAuth,(req:AuthRequest,res)=>res.json({user:req.
 app.get('/api/v1/dashboard',requireAuth,async(req:AuthRequest,res)=>{
   const [f,d,v,r,a]=await Promise.all([
     query('SELECT count(*)::int count FROM foreigners WHERE organization_id=$1 AND status<>$2',[req.user.organization_id,'ARCHIVED']),
-    query('SELECT count(*)::int count FROM identity_documents d JOIN foreigners f ON f.id=d.foreigner_id WHERE f.organization_id=$1',[req.user.organization_id]),
-    query('SELECT count(*)::int count FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE f.organization_id=$1 AND v.end_date>=CURRENT_DATE',[req.user.organization_id]),
-    query('SELECT count(*)::int count FROM registrations r JOIN foreigners f ON f.id=r.foreigner_id WHERE f.organization_id=$1 AND r.end_date>=CURRENT_DATE',[req.user.organization_id]),
+    query("SELECT count(*)::int count FROM identity_documents d JOIN foreigners f ON f.id=d.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED'",[req.user.organization_id]),
+    query("SELECT count(*)::int count FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED' AND v.end_date>=CURRENT_DATE",[req.user.organization_id]),
+    query("SELECT count(*)::int count FROM registrations r JOIN foreigners f ON f.id=r.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED' AND r.end_date>=CURRENT_DATE",[req.user.organization_id]),
     query('SELECT count(*)::int count FROM audit_logs WHERE organization_id=$1 AND created_at>=CURRENT_DATE',[req.user.organization_id])
   ])
   res.json({foreigners:f.rows[0].count,documents:d.rows[0].count,visas:v.rows[0].count,registrations:r.rows[0].count,todayActions:a.rows[0].count})
