@@ -29,6 +29,13 @@ function App(){
     if(token)headers.Authorization='Bearer '+token
     const r=await fetch(API+path,{...opts,headers})
     const d=await r.json().catch(()=>({}))
+    if(r.status===401){
+      localStorage.removeItem('token')
+      setToken('')
+      setSelected(null)
+      setWizard(false)
+      throw new Error('Сессия истекла. Войдите в систему заново.')
+    }
     if(!r.ok)throw new Error(d.message||'Ошибка запроса')
     return d
   }
