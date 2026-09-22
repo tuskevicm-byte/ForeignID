@@ -29,6 +29,8 @@ function App(){
   const [file,setFile]=React.useState({fileName:'',fileUrl:'',fileType:'',fileSize:''})
   const [savingFile,setSavingFile]=React.useState(false)
   const [detailTab,setDetailTab]=React.useState('Основная информация')
+  const [serviceType,setServiceType]=React.useState('Регистрация иностранного гражданина')
+  const [creatingApplication,setCreatingApplication]=React.useState(false)
 
   async function api(path:string,opts:any={}){
     const headers:any={'Content-Type':'application/json',...(opts.headers||{})}
@@ -54,6 +56,11 @@ function App(){
     if(!token)return
     try{const d=await api('/foreigners?q='+encodeURIComponent(q));setForeigners(d.data||[])}
     catch(e:any){setError(e.message)}
+  }
+  async function createApplication(foreignerId:string){
+    setCreatingApplication(true);setError('')
+    try{await api('/government/applications',{method:'POST',body:JSON.stringify({foreignerId,serviceType})});await loadSection()}
+    catch(e:any){setError(e.message)}finally{setCreatingApplication(false)}
   }
   async function loadSection(){
     if(!token)return
@@ -221,7 +228,7 @@ function App(){
     if(active==='Контроль сроков')return <><h1>Контроль сроков</h1><p className="muted">Сроки регистрации, виз, документов и страхования.</p><div className="panel"><table><thead><tr><th>ФИО</th><th>Тип</th><th>Запись</th><th>Срок</th><th>Статус</th></tr></thead><tbody>{(data.data||[]).map((x:any)=><tr key={x.item_type+x.item_name+x.end_date}><td>{x.last_name} {x.first_name}</td><td>{x.item_type}</td><td>{x.item_name}</td><td>{x.end_date}</td><td><span className={x.deadline_status==='EXPIRED'?'bad':x.deadline_status==='WARNING'?'warn':'ok'}>{x.deadline_status==='EXPIRED'?'ПРОСРОЧЕНО':x.deadline_status==='WARNING'?'СКОРО':'В НОРМЕ'}</span></td></tr>)}</tbody></table></div></>
     if(active==='Документы')return <><h1>Документы</h1><p className="muted">Хранилище и управление документами.</p><div className="grid2"><div className="panel pad"><h2>Документы</h2>{(data.documents||[]).map((d:any)=><div className="record" key={d.id}><b>{d.last_name} {d.first_name}</b><span>{d.document_type} №{d.document_number} · до {d.expiry_date}</span></div>)}</div><div className="panel pad"><h2>Визы</h2>{(data.visas||[]).map((v:any)=><div className="record" key={v.id}><b>{v.last_name} {v.first_name}</b><span>{v.visa_type} · до {v.end_date}</span></div>)}</div></div></>
     if(active==='История')return <><h1>История действий</h1><p className="muted">Журнал операций пользователей.</p><div className="panel">{(data.data||[]).map((x:any)=><div className="history" key={x.id}><b>{x.action} · {x.entity_type}</b><span>{new Date(x.created_at).toLocaleString()} · {x.first_name||'система'}</span></div>)}</div></>
-    if(active==='Е-паслуга')return <><h1>Е-паслуга</h1><p className="muted">Регистрация иностранных граждан на территории Республики Беларусь.</p><div className="panel pad"><h2>Как это работает</h2><ol><li>Проверить право и данные.</li><li>Подготовить данные.</li><li>Перейти в официальный сервис.</li><li>Подтвердить данные и завершить операцию.</li><li>Сохранить номер/статус операции.</li></ol><p className="muted">Автоматическая отправка реализуется только через одобренный официальный API.</p></div><div className="panel">{(data.data||[]).length?(data.data||[]).map((x:any)=><div className="history" key={x.id}><b>{x.service_type}</b><span>{x.last_name||''} {x.first_name||''} · {x.status}</span></div>):<div className="pad">Заявок пока нет.</div>}</div></>
+    if(active==='Е-паслуга')return <><h1>Е-паслуга</h1><p className="muted">Подготовка заявки на официальную государственную услугу.</p>{error&&<div className="error">{error}</div>}<div className="panel pad"><h2>Создать заявку</h2><div className="form-grid"><label>Иностранец<select value={serviceType} onChange={()=>{}}><option value={serviceType}>Выберите иностранца ниже</option></select></label><label>Услуга<input value={serviceType} onChange={e=>setServiceType(e.target.value)}/></label></div><p className="muted">Нажмите «Создать заявку» напротив нужного иностранца. Заявка получает статус подготовки к официальной отправке.</p><div className="panel">{foreigners.filter((x:any)=>x.status!=='ARCHIVED').map((x:any)=><div className="record" key={x.id}><span><b>{x.last_name} {x.first_name}</b> · {x.citizenship}</span><button className="primary" disabled={creatingApplication} onClick={()=>createApplication(x.id)}>Создать заявку</button></div>)}</div></div><div className="panel"><h2 className="pad">Заявки</h2>{(data.data||[]).length?(data.data||[]).map((x:any)=><div className="history" key={x.id}><b>{x.service_type}</b><span>{x.last_name||''} {x.first_name||''} · {x.status}</span></div>):<div className="pad">Заявок пока нет.</div>}</div></>
     if(active==='Отчёты')return <><h1>Отчёты</h1><p className="muted">Сводка по организации</p><div className="cards">{stats(Number(data?.foreigners)||0,'Иностранцев')}{stats(Number(data?.documents)||0,'Документов')}{stats(Number(data?.visas)||0,'Активных виз')}{stats(Number(data?.registrations)||0,'Регистраций')}</div><div className="panel pad"><h2>Экспорт</h2><p className="muted">Отчет по документам, визам и регистрациям с контрольными сроками.</p><button type="button" onClick={exportExcel}>Экспорт Excel</button> <button type="button" onClick={exportPdf}>Экспорт PDF</button></div></>
     return null
   }
