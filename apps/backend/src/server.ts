@@ -60,29 +60,32 @@ app.get('/api/v1/foreigners',requireAuth,async(req:AuthRequest,res)=>{
 app.get('/api/v1/foreigners/:id',requireAuth,async(req:AuthRequest,res)=>{
   const f=await query('SELECT * FROM foreigners WHERE id=$1 AND organization_id=$2',[req.params.id,req.user.organization_id])
   if(!f.rowCount)return res.status(404).json({message:'Иностранец не найден'})
-  const [documents,visas,registrations]=await Promise.all([
+  const [documents,visas,registrations,files]=await Promise.all([
     query('SELECT * FROM identity_documents WHERE foreigner_id=$1 ORDER BY expiry_date DESC NULLS LAST',[req.params.id]),
     query('SELECT * FROM visas WHERE foreigner_id=$1 ORDER BY end_date DESC',[req.params.id]),
-    query('SELECT * FROM registrations WHERE foreigner_id=$1 ORDER BY end_date DESC',[req.params.id])
+    query('SELECT * FROM registrations WHERE foreigner_id=$1 ORDER BY end_date DESC',[req.params.id]),
+    query('SELECT * FROM foreigner_files WHERE foreigner_id=$1 ORDER BY created_at DESC',[req.params.id])
   ])
-  res.json({foreigner:f.rows[0],documents:documents.rows,visas:visas.rows,registrations:registrations.rows})
+  res.json({foreigner:f.rows[0],documents:documents.rows,visas:visas.rows,registrations:registrations.rows,files:files.rows})
 })
 
 app.post('/api/v1/foreigners',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
-  const {firstName,middleName,lastName,citizenship,birthDate,phone,email}=req.body||{}
+  const {firstName,middleName,lastName,citizenship,birthDate,gender,phone,email,entryDate,stayBasis,stayAddress,insuranceCompany,insurancePolicyNumber,insuranceEndDate,photoUrl}=req.body||{}
   if(!firstName||!lastName||!citizenship)return res.status(400).json({message:'Имя, фамилия и гражданство обязательны'})
-  const r=await query('INSERT INTO foreigners(organization_id,first_name,middle_name,last_name,citizenship,birth_date,phone,email) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-    [req.user.organization_id,firstName,middleName||null,lastName,citizenship,birthDate||null,phone||null,email||null])
+  const r=await query(`INSERT INTO foreigners(organization_id,first_name,middle_name,last_name,citizenship,birth_date,gender,phone,email,entry_date,stay_basis,stay_address,insurance_company,insurance_policy_number,insurance_end_date,photo_url)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+    [req.user.organization_id,firstName,middleName||null,lastName,citizenship,birthDate||null,gender||null,phone||null,email||null,entryDate||null,stayBasis||null,stayAddress||null,insuranceCompany||null,insurancePolicyNumber||null,insuranceEndDate||null,photoUrl||null])
   await audit(req,'CREATE','FOREIGNER',r.rows[0].id,{firstName,lastName})
   res.status(201).json(r.rows[0])
 })
 
 app.patch('/api/v1/foreigners/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
-  const {firstName,middleName,lastName,citizenship,birthDate,phone,email,status}=req.body||{}
+  const {firstName,middleName,lastName,citizenship,birthDate,gender,phone,email,entryDate,stayBasis,stayAddress,insuranceCompany,insurancePolicyNumber,insuranceEndDate,photoUrl,status}=req.body||{}
   const r=await query(`UPDATE foreigners SET first_name=COALESCE($1,first_name),middle_name=$2,last_name=COALESCE($3,last_name),
-    citizenship=COALESCE($4,citizenship),birth_date=$5,phone=$6,email=$7,status=COALESCE($8,status),updated_at=now()
-    WHERE id=$9 AND organization_id=$10 RETURNING *`,
-    [firstName,middleName||null,lastName,citizenship,birthDate||null,phone||null,email||null,status,req.params.id,req.user.organization_id])
+    citizenship=COALESCE($4,citizenship),birth_date=$5,gender=$6,phone=$7,email=$8,entry_date=$9,stay_basis=$10,stay_address=$11,
+    insurance_company=$12,insurance_policy_number=$13,insurance_end_date=$14,photo_url=$15,status=COALESCE($16,status),updated_at=now()
+    WHERE id=$17 AND organization_id=$18 RETURNING *`,
+    [firstName,middleName||null,lastName,citizenship,birthDate||null,gender||null,phone||null,email||null,entryDate||null,stayBasis||null,stayAddress||null,insuranceCompany||null,insurancePolicyNumber||null,insuranceEndDate||null,photoUrl||null,status,req.params.id,req.user.organization_id])
   if(!r.rowCount)return res.status(404).json({message:'Иностранец не найден'})
   await audit(req,'UPDATE','FOREIGNER',req.params.id,{firstName,lastName,status})
   res.json(r.rows[0])
@@ -123,6 +126,52 @@ app.post('/api/v1/visas',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR')
   const r=await query('INSERT INTO visas(foreigner_id,visa_type,visa_number,issue_date,start_date,end_date,status,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
     [foreignerId,visaType,visaNumber||null,issueDate||null,startDate||null,endDate,status||'ACTIVE',notes||null])
   await audit(req,'CREATE','VISA',r.rows[0].id,{visaType,visaNumber});res.status(201).json(r.rows[0])
+})
+
+
+app.post('/api/v1/registrations',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
+  const {foreignerId,registrationType,registrationNumber,startDate,endDate,status,governmentReference}=req.body||{}
+  if(!foreignerId||!endDate)return res.status(400).json({message:'Иностранец и дата окончания регистрации обязательны'})
+  const own=await query('SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2',[foreignerId,req.user.organization_id])
+  if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
+  const r=await query('INSERT INTO registrations(foreigner_id,registration_type,registration_number,start_date,end_date,status,government_reference) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+    [foreignerId,registrationType||'TEMPORARY_STAY',registrationNumber||null,startDate||null,endDate,status||'ACTIVE',governmentReference||null])
+  await audit(req,'CREATE','REGISTRATION',r.rows[0].id,{registrationType,registrationNumber});res.status(201).json(r.rows[0])
+})
+app.patch('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
+  const {documentType,documentNumber,issuingCountry,issueDate,expiryDate}=req.body||{}
+  const r=await query(`UPDATE identity_documents d SET document_type=COALESCE($1,d.document_type),document_number=COALESCE($2,d.document_number),
+    issuing_country=$3,issue_date=$4,expiry_date=COALESCE($5,d.expiry_date)
+    FROM foreigners f WHERE d.id=$6 AND d.foreigner_id=f.id AND f.organization_id=$7 RETURNING d.*`,
+    [documentType,documentNumber,issuingCountry||null,issueDate||null,expiryDate,req.params.id,req.user.organization_id])
+  if(!r.rowCount)return res.status(404).json({message:'Документ не найден'})
+  await audit(req,'UPDATE','DOCUMENT',req.params.id,{documentType,documentNumber});res.json(r.rows[0])
+})
+app.delete('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
+  const r=await query('DELETE FROM identity_documents d USING foreigners f WHERE d.id=$1 AND d.foreigner_id=f.id AND f.organization_id=$2 RETURNING d.id',[req.params.id,req.user.organization_id])
+  if(!r.rowCount)return res.status(404).json({message:'Документ не найден'})
+  await audit(req,'DELETE','DOCUMENT',req.params.id);res.json({ok:true})
+})
+app.patch('/api/v1/visas/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
+  const {visaType,visaNumber,issueDate,startDate,endDate,status,notes}=req.body||{}
+  const r=await query(`UPDATE visas v SET visa_type=COALESCE($1,v.visa_type),visa_number=$2,issue_date=$3,start_date=$4,end_date=COALESCE($5,v.end_date),status=COALESCE($6,v.status),notes=$7
+    FROM foreigners f WHERE v.id=$8 AND v.foreigner_id=f.id AND f.organization_id=$9 RETURNING v.*`,
+    [visaType,visaNumber||null,issueDate||null,startDate||null,endDate,status||null,notes||null,req.params.id,req.user.organization_id])
+  if(!r.rowCount)return res.status(404).json({message:'Виза не найдена'})
+  await audit(req,'UPDATE','VISA',req.params.id,{visaType,visaNumber});res.json(r.rows[0])
+})
+app.delete('/api/v1/visas/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
+  const r=await query('DELETE FROM visas v USING foreigners f WHERE v.id=$1 AND v.foreigner_id=f.id AND f.organization_id=$2 RETURNING v.id',[req.params.id,req.user.organization_id])
+  if(!r.rowCount)return res.status(404).json({message:'Виза не найдена'})
+  await audit(req,'DELETE','VISA',req.params.id);res.json({ok:true})
+})
+app.post('/api/v1/files',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
+  const {foreignerId,fileName,fileUrl,fileType,fileSize}=req.body||{}
+  if(!foreignerId||!fileName||!fileUrl)return res.status(400).json({message:'Владелец, имя файла и ссылка обязательны'})
+  const own=await query('SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2',[foreignerId,req.user.organization_id])
+  if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
+  const r=await query('INSERT INTO foreigner_files(foreigner_id,file_name,file_url,file_type,file_size) VALUES($1,$2,$3,$4,$5) RETURNING *',[foreignerId,fileName,fileUrl,fileType||null,fileSize||null])
+  await audit(req,'CREATE','FILE',r.rows[0].id,{fileName});res.status(201).json(r.rows[0])
 })
 
 app.get('/api/v1/deadlines',requireAuth,async(req:AuthRequest,res)=>{
