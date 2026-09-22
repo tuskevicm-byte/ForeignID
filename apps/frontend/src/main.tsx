@@ -55,7 +55,7 @@ function App(){
   React.useEffect(()=>{loadForeigners()},[token,q])
   React.useEffect(()=>{loadSection()},[token,active])
 
-  function startAdd(){setForm({...blank});setStep(1);setEditing(false);setWizard(true);setError('')}
+  function startAdd(){setForm({...blank});setDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''});setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});setRegistration({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''});setStep(1);setEditing(false);setWizard(true);setError('')}
   function startEdit(){if(!selected)return;setForm({...blank,...selected.foreigner,firstName:selected.foreigner.first_name,middleName:selected.foreigner.middle_name||'',lastName:selected.foreigner.last_name,citizenship:selected.foreigner.citizenship,birthDate:selected.foreigner.birth_date||'',gender:selected.foreigner.gender||'',phone:selected.foreigner.phone||'',email:selected.foreigner.email||'',entryDate:selected.foreigner.entry_date||'',stayBasis:selected.foreigner.stay_basis||'',stayAddress:selected.foreigner.stay_address||'',insuranceCompany:selected.foreigner.insurance_company||'',insurancePolicyNumber:selected.foreigner.insurance_policy_number||'',insuranceEndDate:selected.foreigner.insurance_end_date||'',photoUrl:selected.foreigner.photo_url||''});setStep(1);setEditing(true);setWizard(true);setError('')}
   async function saveForeigner(e:any){
     e.preventDefault();setSaving(true);setError('')
