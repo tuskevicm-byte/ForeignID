@@ -52,7 +52,7 @@ app.get('/api/v1/foreigners',requireAuth,async(req:AuthRequest,res)=>{
     (SELECT row_to_json(v) FROM visas v WHERE v.foreigner_id=f.id ORDER BY v.end_date DESC LIMIT 1) visa,
     (SELECT row_to_json(r) FROM registrations r WHERE r.foreigner_id=f.id ORDER BY r.end_date DESC LIMIT 1) registration
     FROM foreigners f WHERE f.organization_id=$1`
-  if(q){params.push(`%${q}%`);sql+=' AND (f.first_name ILIKE $2 OR f.last_name ILIKE $2 OR f.citizenship ILIKE $2)'}
+  if(q){params.push(`%${q}%`);sql+=' AND (f.first_name ILIKE $2 OR f.last_name ILIKE $2 OR f.middle_name ILIKE $2 OR f.citizenship ILIKE $2 OR f.phone ILIKE $2 OR f.email ILIKE $2 OR EXISTS (SELECT 1 FROM identity_documents sd WHERE sd.foreigner_id=f.id AND sd.document_number ILIKE $2))'}
   sql+=' ORDER BY f.created_at DESC'
   const r=await query(sql,params); res.json({data:r.rows,total:r.rowCount})
 })
@@ -199,7 +199,9 @@ app.get('/api/v1/deadlines',requireAuth,async(req:AuthRequest,res)=>{
     SELECT f.id,f.first_name,f.last_name,'Виза',v.visa_type,v.end_date FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE f.organization_id=$1
     UNION ALL
     SELECT f.id,f.first_name,f.last_name,'Регистрация',r.registration_type,r.end_date FROM registrations r JOIN foreigners f ON f.id=r.foreigner_id WHERE f.organization_id=$1
-  ) x ORDER BY end_date ASC`,[req.user.organization_id])
+    UNION ALL
+    SELECT f.id,f.first_name,f.last_name,'Страховка','Страховой полис',f.insurance_end_date FROM foreigners f WHERE f.organization_id=$1 AND f.insurance_end_date IS NOT NULL
+  ) x WHERE end_date IS NOT NULL ORDER BY end_date ASC`,[req.user.organization_id])
   res.json({data:r.rows.map((x:any)=>({...x,deadline_status:new Date(x.end_date)<new Date()?'EXPIRED':Math.ceil((new Date(x.end_date).getTime()-Date.now())/86400000)<=7?'WARNING':'NORMAL'}))})
 })
 
