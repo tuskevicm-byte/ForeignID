@@ -24,6 +24,7 @@ function App(){
   const [visa,setVisa]=React.useState({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''})
   const [registration,setRegistration]=React.useState({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''})
   const [editingDocId,setEditingDocId]=React.useState<string|null>(null)
+  const [editingVisaId,setEditingVisaId]=React.useState<string|null>(null)
   const [editingRegistrationId,setEditingRegistrationId]=React.useState<string|null>(null)
 
   async function api(path:string,opts:any={}){
@@ -64,8 +65,8 @@ function App(){
   React.useEffect(()=>{loadForeigners()},[token,q])
   React.useEffect(()=>{loadSection()},[token,active])
 
-  function startAdd(){setForm({...blank});setDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''});setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});setRegistration({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''});setStep(1);setEditing(false);setWizard(true);setError('')}
-  function startEdit(){if(!selected)return;setForm({...blank,...selected.foreigner,firstName:selected.foreigner.first_name,middleName:selected.foreigner.middle_name||'',lastName:selected.foreigner.last_name,citizenship:selected.foreigner.citizenship,birthDate:selected.foreigner.birth_date||'',gender:selected.foreigner.gender||'',phone:selected.foreigner.phone||'',email:selected.foreigner.email||'',entryDate:selected.foreigner.entry_date||'',stayBasis:selected.foreigner.stay_basis||'',stayAddress:selected.foreigner.stay_address||'',insuranceCompany:selected.foreigner.insurance_company||'',insurancePolicyNumber:selected.foreigner.insurance_policy_number||'',insuranceEndDate:selected.foreigner.insurance_end_date||'',photoUrl:selected.foreigner.photo_url||''});setStep(1);setEditing(true);setWizard(true);setError('')}
+  function startAdd(){setForm({...blank});setDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''});setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});setRegistration({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''});setStep(1);setEditing(false);setEditingDocId(null);setEditingVisaId(null);setEditingRegistrationId(null);setWizard(true);setError('')}
+  function startEdit(){if(!selected)return;const f=selected.foreigner;const d=selected.documents?.[0];const v=selected.visas?.[0];const r=selected.registrations?.[0];setForm({...blank,...f,firstName:f.first_name,middleName:f.middle_name||'',lastName:f.last_name,citizenship:f.citizenship,birthDate:f.birth_date||'',gender:f.gender||'',phone:f.phone||'',email:f.email||'',entryDate:f.entry_date||'',stayBasis:f.stay_basis||'',stayAddress:f.stay_address||'',insuranceCompany:f.insurance_company||'',insurancePolicyNumber:f.insurance_policy_number||'',insuranceEndDate:f.insurance_end_date||'',photoUrl:f.photo_url||''});if(d){setDoc({documentType:d.document_type||'Паспорт',documentNumber:d.document_number||'',issuingCountry:d.issuing_country||'',issueDate:d.issue_date||'',expiryDate:d.expiry_date||''});setEditingDocId(d.id)}else setEditingDocId(null);if(v){setVisa({visaType:v.visa_type||'',visaNumber:v.visa_number||'',issueDate:v.issue_date||'',startDate:v.start_date||'',endDate:v.end_date||'',notes:v.notes||''});setEditingVisaId(v.id)}else {setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});setEditingVisaId(null)}if(r){setRegistration({registrationType:r.registration_type||'TEMPORARY_STAY',registrationNumber:r.registration_number||'',startDate:r.start_date||'',endDate:r.end_date||'',governmentReference:r.government_reference||''});setEditingRegistrationId(r.id)}else setEditingRegistrationId(null);setStep(1);setEditing(true);setWizard(true);setError('')}
   async function saveForeigner(e:any){
     e.preventDefault();setSaving(true);setError('')
     try{
@@ -80,7 +81,7 @@ function App(){
       if(doc.documentNumber&&doc.expiryDate)await api('/documents',{method:'POST',body:JSON.stringify({...doc,foreignerId})})
       if(visa.visaType&&visa.endDate)await api('/visas',{method:'POST',body:JSON.stringify({...visa,foreignerId})})
       if(registration.endDate)await api('/registrations',{method:'POST',body:JSON.stringify({...registration,foreignerId})})
-      setWizard(false);setEditing(false);await loadForeigners()
+      setWizard(false);setEditing(false);setEditingDocId(null);setEditingVisaId(null);setEditingRegistrationId(null);await loadForeigners()
       if(editing)await openForeigner({id:selected.foreigner.id})
       else await openForeigner({id:foreignerId})
     }catch(e:any){setError(e.message)}finally{setSaving(false)}
@@ -103,7 +104,7 @@ function App(){
   async function deleteDoc(id:string){if(!confirm('Удалить документ?'))return;try{await api('/documents/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
   async function saveVisa(e:any){
     e.preventDefault()
-    try{await api('/visas',{method:'POST',body:JSON.stringify({...visa,foreignerId:selected.foreigner.id})});setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});await openForeigner(selected.foreigner)}
+    try{const path=editingVisaId?'/visas/'+editingVisaId:'/visas';const method=editingVisaId?'PATCH':'POST';await api(path,{method,body:JSON.stringify(editingVisaId?visa:{...visa,foreignerId:selected.foreigner.id})});setEditingVisaId(null);setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});await openForeigner(selected.foreigner)}
     catch(e:any){setError(e.message)}
   }
   async function deleteVisa(id:string){if(!confirm('Удалить визу/разрешение?'))return;try{await api('/visas/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
