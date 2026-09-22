@@ -23,6 +23,8 @@ function App(){
   const [doc,setDoc]=React.useState({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''})
   const [visa,setVisa]=React.useState({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''})
   const [registration,setRegistration]=React.useState({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''})
+  const [editingDocId,setEditingDocId]=React.useState<string|null>(null)
+  const [editingRegistrationId,setEditingRegistrationId]=React.useState<string|null>(null)
 
   async function api(path:string,opts:any={}){
     const headers:any={'Content-Type':'application/json',...(opts.headers||{})}
@@ -90,9 +92,14 @@ function App(){
   }
   async function saveDoc(e:any){
     e.preventDefault()
-    try{await api('/documents',{method:'POST',body:JSON.stringify({...doc,foreignerId:selected.foreigner.id})});setDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''});await openForeigner(selected.foreigner)}
-    catch(e:any){setError(e.message)}
+    try{
+      const path=editingDocId?'/documents/'+editingDocId:'/documents'
+      const method=editingDocId?'PATCH':'POST'
+      await api(path,{method,body:JSON.stringify(editingDocId?doc:{...doc,foreignerId:selected.foreigner.id})})
+      setEditingDocId(null);setDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''});await openForeigner(selected.foreigner)
+    }catch(e:any){setError(e.message)}
   }
+  function editDoc(d:any){setEditingDocId(d.id);setDoc({documentType:d.document_type||'Паспорт',documentNumber:d.document_number||'',issuingCountry:d.issuing_country||'',issueDate:d.issue_date||'',expiryDate:d.expiry_date||''});setError('')}
   async function deleteDoc(id:string){if(!confirm('Удалить документ?'))return;try{await api('/documents/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
   async function saveVisa(e:any){
     e.preventDefault()
@@ -102,9 +109,15 @@ function App(){
   async function deleteVisa(id:string){if(!confirm('Удалить визу/разрешение?'))return;try{await api('/visas/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
   async function saveRegistration(e:any){
     e.preventDefault()
-    try{await api('/registrations',{method:'POST',body:JSON.stringify({...registration,foreignerId:selected.foreigner.id})});setRegistration({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''});await openForeigner(selected.foreigner)}
-    catch(e:any){setError(e.message)}
+    try{
+      const path=editingRegistrationId?'/registrations/'+editingRegistrationId:'/registrations'
+      const method=editingRegistrationId?'PATCH':'POST'
+      await api(path,{method,body:JSON.stringify(editingRegistrationId?registration:{...registration,foreignerId:selected.foreigner.id})})
+      setEditingRegistrationId(null);setRegistration({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''});await openForeigner(selected.foreigner)
+    }catch(e:any){setError(e.message)}
   }
+  function editRegistration(r:any){setEditingRegistrationId(r.id);setRegistration({registrationType:r.registration_type||'TEMPORARY_STAY',registrationNumber:r.registration_number||'',startDate:r.start_date||'',endDate:r.end_date||'',governmentReference:r.government_reference||''});setError('')}
+  async function deleteRegistration(id:string){if(!confirm('Удалить регистрацию?'))return;try{await api('/registrations/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
   async function readPhoto(e:any){
     const file=e.target.files?.[0];if(!file)return
     if(file.size>1500000){setError('Фото слишком большое. Максимум 1.5 МБ.');return}
@@ -147,12 +160,12 @@ function App(){
         <div className="panel pad"><h3>Документ</h3>{selected.documents[0]?<><p><b>Тип:</b> {selected.documents[0].document_type}</p><p><b>Номер:</b> {selected.documents[0].document_number}</p><p><b>Страна:</b> {selected.documents[0].issuing_country||'—'}</p><p><b>Выдан:</b> {selected.documents[0].issue_date||'—'}</p><p><b>Срок:</b> {selected.documents[0].expiry_date||'—'}</p></>:<p className="muted">Документ не указан</p>}</div>
         <div className="panel pad"><h3>Пребывание в РБ</h3><p><b>Дата въезда:</b> {f.entry_date||'—'}</p><p><b>Основание:</b> {f.stay_basis||'—'}</p><p><b>Адрес:</b> {f.stay_address||'—'}</p></div>
         <div className="panel pad"><h3>Виза / Разрешение</h3>{selected.visas.length?selected.visas.map((v:any)=><div className="record" key={v.id}><b>{v.visa_type} {v.visa_number?'№'+v.visa_number:''}</b><span>до {v.end_date} <button onClick={()=>deleteVisa(v.id)}>Удалить</button></span></div>):<p className="muted">Нет записей</p>}</div>
-        <div className="panel pad"><h3>Регистрация</h3>{selected.registrations.length?selected.registrations.map((r:any)=><div className="record" key={r.id}><b>{r.registration_type}</b><span>до {r.end_date}</span></div>):<p className="muted">Нет регистрации</p>}</div>
+        <div className="panel pad"><h3>Регистрация</h3>{selected.registrations.length?selected.registrations.map((r:any)=><div className="record" key={r.id}><b>{r.registration_type}</b><span>до {r.end_date} <button onClick={()=>editRegistration(r)}>Редактировать</button> <button onClick={()=>deleteRegistration(r.id)}>Удалить</button></span></div>):<p className="muted">Нет регистрации</p>}</div>
         <div className="panel pad"><h3>Страхование</h3><p><b>Компания:</b> {f.insurance_company||'—'}</p><p><b>Полис:</b> {f.insurance_policy_number||'—'}</p><p><b>Действует до:</b> {f.insurance_end_date||'—'}</p></div>
       </div>
       <div className="grid2">
-        <div className="panel pad"><h2>Добавить документ</h2><form onSubmit={saveDoc} className="stack"><input placeholder="Тип документа" value={doc.documentType} onChange={e=>setDoc({...doc,documentType:e.target.value})}/><input placeholder="Номер" required value={doc.documentNumber} onChange={e=>setDoc({...doc,documentNumber:e.target.value})}/><input placeholder="Страна выдачи" value={doc.issuingCountry} onChange={e=>setDoc({...doc,issuingCountry:e.target.value})}/><input type="date" value={doc.issueDate} onChange={e=>setDoc({...doc,issueDate:e.target.value})}/><input type="date" required value={doc.expiryDate} onChange={e=>setDoc({...doc,expiryDate:e.target.value})}/><button className="primary">Сохранить документ</button></form>{selected.documents.map((d:any)=><div className="record" key={d.id}><span>{d.document_type} №{d.document_number}</span><button onClick={()=>deleteDoc(d.id)}>Удалить</button></div>)}</div>
-        <div className="panel pad"><h2>Добавить регистрацию</h2><form onSubmit={saveRegistration} className="stack"><input placeholder="Тип" value={registration.registrationType} onChange={e=>setRegistration({...registration,registrationType:e.target.value})}/><input placeholder="Номер" value={registration.registrationNumber} onChange={e=>setRegistration({...registration,registrationNumber:e.target.value})}/><input type="date" value={registration.startDate} onChange={e=>setRegistration({...registration,startDate:e.target.value})}/><input type="date" required value={registration.endDate} onChange={e=>setRegistration({...registration,endDate:e.target.value})}/><button className="primary">Сохранить регистрацию</button></form></div>
+        <div className="panel pad"><h2>{editingDocId?'Редактировать документ':'Добавить документ'}</h2><form onSubmit={saveDoc} className="stack"><input placeholder="Тип документа" value={doc.documentType} onChange={e=>setDoc({...doc,documentType:e.target.value})}/><input placeholder="Номер" required value={doc.documentNumber} onChange={e=>setDoc({...doc,documentNumber:e.target.value})}/><input placeholder="Страна выдачи" value={doc.issuingCountry} onChange={e=>setDoc({...doc,issuingCountry:e.target.value})}/><input type="date" value={doc.issueDate} onChange={e=>setDoc({...doc,issueDate:e.target.value})}/><input type="date" required value={doc.expiryDate} onChange={e=>setDoc({...doc,expiryDate:e.target.value})}/><button className="primary">{editingDocId?'Сохранить изменения':'Сохранить документ'}</button></form>{selected.documents.map((d:any)=><div className="record" key={d.id}><span>{d.document_type} №{d.document_number}</span><span><button type="button" onClick={()=>editDoc(d)}>Редактировать</button> <button type="button" onClick={()=>deleteDoc(d.id)}>Удалить</button></span></div>)}</div>
+        <div className="panel pad"><h2>{editingRegistrationId?'Редактировать регистрацию':'Добавить регистрацию'}</h2><form onSubmit={saveRegistration} className="stack"><input placeholder="Тип" value={registration.registrationType} onChange={e=>setRegistration({...registration,registrationType:e.target.value})}/><input placeholder="Номер" value={registration.registrationNumber} onChange={e=>setRegistration({...registration,registrationNumber:e.target.value})}/><input type="date" value={registration.startDate} onChange={e=>setRegistration({...registration,startDate:e.target.value})}/><input type="date" required value={registration.endDate} onChange={e=>setRegistration({...registration,endDate:e.target.value})}/><button className="primary">{editingRegistrationId?'Сохранить изменения':'Сохранить регистрацию'}</button></form></div>
       </div></>
   }
 
