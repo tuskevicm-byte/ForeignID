@@ -99,3 +99,24 @@ CREATE INDEX IF NOT EXISTS idx_registrations_end_date ON registrations(end_date)
 CREATE INDEX IF NOT EXISTS idx_documents_expiry ON identity_documents(expiry_date);
 CREATE INDEX IF NOT EXISTS idx_visas_end_date ON visas(end_date);
 CREATE INDEX IF NOT EXISTS idx_audit_org_created ON audit_logs(organization_id, created_at DESC);
+
+ALTER TABLE foreigners ADD COLUMN IF NOT EXISTS gender text;
+ALTER TABLE foreigners ADD COLUMN IF NOT EXISTS entry_date date;
+ALTER TABLE foreigners ADD COLUMN IF NOT EXISTS stay_basis text;
+ALTER TABLE foreigners ADD COLUMN IF NOT EXISTS stay_address text;
+ALTER TABLE foreigners ADD COLUMN IF NOT EXISTS insurance_company text;
+ALTER TABLE foreigners ADD COLUMN IF NOT EXISTS insurance_policy_number text;
+ALTER TABLE foreigners ADD COLUMN IF NOT EXISTS insurance_end_date date;
+ALTER TABLE foreigners ADD COLUMN IF NOT EXISTS photo_url text;
+
+CREATE TABLE IF NOT EXISTS foreigner_files (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  foreigner_id uuid NOT NULL REFERENCES foreigners(id) ON DELETE CASCADE,
+  file_name text NOT NULL,
+  file_url text NOT NULL,
+  file_type text,
+  file_size bigint,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_foreigner_files_foreigner ON foreigner_files(foreigner_id);
