@@ -1,16 +1,59 @@
-# ForeignID v0.2 — PostgreSQL + authentication
+# ForeignID v0.2.1
 
-This version upgrades the starter with a real PostgreSQL data layer, JWT authentication, role-based access control, migrations/schema, and protected API routes.
+Система учета иностранных граждан: карточки иностранцев, документы, визы/разрешения, регистрации, страхование, контроль сроков, история действий и роли пользователей.
 
-## Local start
-1. Copy `.env.example` to `.env`.
-2. Run `docker compose up -d`.
-3. In `apps/backend` run `npm install`.
-4. Run `npm run dev`.
-5. In `apps/frontend` run `npm install`.
-6. Run `npm run dev`.
+## Что уже работает
+- Авторизация через JWT и роли пользователей.
+- Создание, просмотр, редактирование и архивирование карточек иностранцев.
+- Поля личных данных, гражданства, даты рождения, пола, телефона и email.
+- Данные о въезде и основании пребывания.
+- Документы удостоверяющие личность: создание, редактирование и удаление.
+- Визы/разрешения: создание и удаление.
+- Регистрации: создание, редактирование и удаление.
+- Страховая компания, номер полиса и срок действия.
+- Фотография в карточке.
+- Контроль сроков документов, виз и регистраций.
+- Журнал действий.
+- Разделы «Документы», «Е-паслуга» и «Отчёты».
+- PostgreSQL с миграцией схемы и демонстрационным seed.
 
-Default demo administrator is created by the seed script only when explicitly run.
+## Локальный запуск
 
-## Production warning
-Do not use demo credentials or sample data in production. Before production, configure secrets, HTTPS, backups, 2FA, object storage, antivirus scanning, audit retention, and a legal/privacy review.
+### 1. Подготовить PostgreSQL
+Из корня проекта:
+
+    docker compose up -d
+
+### 2. Настроить переменные
+Скопировать `.env.example` в `.env` и при необходимости изменить секрет JWT.
+
+### 3. Запустить backend
+    cd apps/backend
+    npm install
+    npm run migrate
+    npm run seed
+    npm run dev
+
+Backend будет доступен на `http://localhost:3000`.
+
+### 4. Запустить frontend
+В другом терминале:
+
+    cd apps/frontend
+    npm install
+    npm run dev
+
+Vite покажет адрес локального приложения.
+
+Если frontend должен обращаться к backend не на `localhost:3000`, задайте `VITE_API_URL`, например:
+
+    VITE_API_URL=http://localhost:3000/api/v1
+
+## Демо-вход
+- Email: `admin@example.local`
+- Пароль: `ChangeMe-123!`
+
+Seed создает этого администратора и демонстрационные записи.
+
+## Важно перед production
+Нужно отдельно настроить HTTPS, секреты, резервное копирование PostgreSQL, 2FA, файловое/object storage, антивирусную проверку загрузок, аудит и юридические требования по защите персональных данных.
