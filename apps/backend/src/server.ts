@@ -12,12 +12,14 @@ const app=express()
 
 const storageRoot=path.resolve(process.env.FILE_STORAGE_PATH||'./storage')
 const allowedFileTypes=new Set(['application/pdf','image/jpeg','image/png','image/webp','text/plain'])
+function safeFileName(name:string){return String(name||'file').replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,180)}
 const extensionForType=(type:string)=>({ 'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp','text/plain':'txt' } as any)[type]||'bin'
 async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:string){
   const match=/^data:([^;]+);base64,(.*)$/.exec(String(fileUrl||''))
   if(!match)throw new Error('Файл должен быть загружен как data URL')
   const mime=match[1], raw=match[2]
   if(!allowedFileTypes.has(mime)||mime!==fileType)throw new Error('Недопустимый тип файла')
+  if(!/^[A-Za-z0-9+/]*={0,2}$/.test(raw)||raw.length%4!==0)throw new Error('Некорректное содержимое файла')
   const buffer=Buffer.from(raw,'base64')
   if(!buffer.length||buffer.length>1500000)throw new Error('Размер файла должен быть от 1 байта до 1.5 МБ')
   const dir=path.join(storageRoot,organizationId); await fs.promises.mkdir(dir,{recursive:true})
