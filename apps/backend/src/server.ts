@@ -99,7 +99,7 @@ app.patch('/api/v1/foreigners/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','
     WHERE id=$17 AND organization_id=$18 RETURNING *`,
     [firstName,middleName||null,lastName,citizenship,birthDate||null,gender||null,phone||null,email||null,entryDate||null,stayBasis||null,stayAddress||null,insuranceCompany||null,insurancePolicyNumber||null,insuranceEndDate||null,photoUrl||null,requestedStatus,req.params.id,req.user.organization_id])
   if(!r.rowCount)return res.status(404).json({message:'Иностранец не найден'})
-  await audit(req,'UPDATE','FOREIGNER',req.params.id,{firstName,lastName,status})
+  await audit(req,'UPDATE','FOREIGNER',req.params.id,{firstName,lastName,status:requestedStatus})
   res.json(r.rows[0])
 })
 
