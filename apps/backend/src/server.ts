@@ -37,6 +37,31 @@ app.post('/api/v1/auth/login',async(req,res)=>{
 
 app.get('/api/v1/auth/me',requireAuth,(req:AuthRequest,res)=>res.json({user:req.user}))
 
+app.post('/api/v1/foreigners/import',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
+  const rows=Array.isArray(req.body?.rows)?req.body.rows:[]
+  if(!rows.length)return res.status(400).json({message:'Нет данных для импорта'})
+  if(rows.length>500)return res.status(400).json({message:'За один импорт можно загрузить не более 500 записей'})
+  const imported:any[]=[],errors:any[]=[]
+  for(let index=0;index<rows.length;index++){
+    const x=rows[index]||{}
+    if(!x.firstName||!x.lastName){errors.push({row:index+1,message:'Имя и фамилия обязательны'});continue}
+    try{
+      const r=await query(`INSERT INTO foreigners(
+        organization_id,first_name,middle_name,last_name,citizenship,birth_date,gender,phone,email,
+        entry_date,stay_basis,stay_address,insurance_company,insurance_policy_number,insurance_end_date
+      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      RETURNING id,first_name,middle_name,last_name`,[
+        req.user.organization_id,x.firstName,x.middleName||null,x.lastName,x.citizenship||null,x.birthDate||null,
+        x.gender||null,x.phone||null,x.email||null,x.entryDate||null,x.stayBasis||null,x.stayAddress||null,
+        x.insuranceCompany||null,x.insurancePolicyNumber||null,x.insuranceEndDate||null
+      ])
+      imported.push(r.rows[0])
+    }catch(e:any){errors.push({row:index+1,message:e?.message||'Ошибка сохранения'})}
+  }
+  await audit(req,'IMPORT','FOREIGNER',null,{count:imported.length,errors:errors.length})
+  res.json({imported:imported.length,errors, data:imported})
+})
+
 app.get('/api/v1/users',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
   const r=await query('SELECT id,email,first_name,last_name,role,is_active,created_at FROM users WHERE organization_id=$1 ORDER BY created_at DESC',[req.user.organization_id])
   res.json({data:r.rows})
