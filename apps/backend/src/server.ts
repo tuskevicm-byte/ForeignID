@@ -129,8 +129,11 @@ app.post('/api/v1/documents',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERAT
 })
 
 app.get('/api/v1/visas',requireAuth,async(req:AuthRequest,res)=>{
-  const r=await query(`SELECT v.*,f.first_name,f.last_name,f.citizenship FROM visas v JOIN foreigners f ON f.id=v.foreigner_id
-    WHERE f.organization_id=$1 AND f.status<>'ARCHIVED' ORDER BY v.end_date ASC`,[req.user.organization_id]);res.json({data:r.rows})
+  const page=Math.max(1,Number(req.query.page)||1),pageSize=Math.min(100,Math.max(1,Number(req.query.pageSize)||25)),offset=(page-1)*pageSize
+  const base=`FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED'`
+  const count=await query(`SELECT COUNT(*)::int AS total ${base}`,[req.user.organization_id])
+  const r=await query(`SELECT v.*,f.first_name,f.last_name,f.citizenship ${base} ORDER BY v.end_date ASC LIMIT $2 OFFSET $3`,[req.user.organization_id,pageSize,offset])
+  res.json({data:r.rows,total:Number(count.rows[0]?.total||0),page,pageSize})
 })
 
 app.post('/api/v1/visas',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
