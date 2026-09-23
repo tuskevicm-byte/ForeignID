@@ -9,6 +9,10 @@ import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 
 const app=express()
+
+function invalidDateRange(startDate:any,endDate:any){
+  return Boolean(startDate&&endDate&&String(startDate)>String(endDate))
+}
 app.use(cors())
 app.use(express.json({limit:'2mb'}))
 
@@ -107,6 +111,7 @@ app.get('/api/v1/documents',requireAuth,async(req:AuthRequest,res)=>{
 app.post('/api/v1/documents',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {foreignerId,documentType,documentNumber,issuingCountry,issueDate,expiryDate}=req.body||{}
   if(!foreignerId||!documentType||!documentNumber||!expiryDate)return res.status(400).json({message:'Иностранец, тип, номер и срок действия обязательны'})
+  if(invalidDateRange(issueDate,expiryDate))return res.status(400).json({message:'Дата выдачи документа не может быть позже даты окончания'})
   const own=await query('SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2',[foreignerId,req.user.organization_id])
   if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
   const r=await query('INSERT INTO identity_documents(foreigner_id,document_type,document_number,issuing_country,issue_date,expiry_date) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',
@@ -122,6 +127,7 @@ app.get('/api/v1/visas',requireAuth,async(req:AuthRequest,res)=>{
 app.post('/api/v1/visas',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {foreignerId,visaType,visaNumber,issueDate,startDate,endDate,status,notes}=req.body||{}
   if(!foreignerId||!visaType||!endDate)return res.status(400).json({message:'Иностранец, тип визы и дата окончания обязательны'})
+  if(invalidDateRange(startDate,endDate)||invalidDateRange(issueDate,endDate))return res.status(400).json({message:'Даты визы указаны некорректно'})
   const own=await query('SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2',[foreignerId,req.user.organization_id])
   if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
   const r=await query('INSERT INTO visas(foreigner_id,visa_type,visa_number,issue_date,start_date,end_date,status,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
@@ -133,6 +139,7 @@ app.post('/api/v1/visas',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR')
 app.post('/api/v1/registrations',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {foreignerId,registrationType,registrationNumber,startDate,endDate,status,governmentReference}=req.body||{}
   if(!foreignerId||!endDate)return res.status(400).json({message:'Иностранец и дата окончания регистрации обязательны'})
+  if(invalidDateRange(startDate,endDate))return res.status(400).json({message:'Дата начала регистрации не может быть позже даты окончания'})
   const own=await query('SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2',[foreignerId,req.user.organization_id])
   if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
   const r=await query('INSERT INTO registrations(foreigner_id,registration_type,registration_number,start_date,end_date,status,government_reference) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',
@@ -141,6 +148,7 @@ app.post('/api/v1/registrations',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OP
 })
 app.patch('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {registrationType,registrationNumber,startDate,endDate,status,governmentReference}=req.body||{}
+  if(invalidDateRange(startDate,endDate))return res.status(400).json({message:'Дата начала регистрации не может быть позже даты окончания'})
   const r=await query(`UPDATE registrations r SET registration_type=COALESCE($1,r.registration_type),registration_number=$2,start_date=$3,end_date=COALESCE($4,r.end_date),status=COALESCE($5,r.status),government_reference=$6
     FROM foreigners f WHERE r.id=$7 AND r.foreigner_id=f.id AND f.organization_id=$8 RETURNING r.*`,
     [registrationType,registrationNumber||null,startDate||null,endDate,status||null,governmentReference||null,req.params.id,req.user.organization_id])
@@ -154,6 +162,7 @@ app.delete('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMI
 })
 app.patch('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {documentType,documentNumber,issuingCountry,issueDate,expiryDate}=req.body||{}
+  if(invalidDateRange(issueDate,expiryDate))return res.status(400).json({message:'Дата выдачи документа не может быть позже даты окончания'})
   const r=await query(`UPDATE identity_documents d SET document_type=COALESCE($1,d.document_type),document_number=COALESCE($2,d.document_number),
     issuing_country=$3,issue_date=$4,expiry_date=COALESCE($5,d.expiry_date)
     FROM foreigners f WHERE d.id=$6 AND d.foreigner_id=f.id AND f.organization_id=$7 RETURNING d.*`,
@@ -168,6 +177,7 @@ app.delete('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),
 })
 app.patch('/api/v1/visas/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {visaType,visaNumber,issueDate,startDate,endDate,status,notes}=req.body||{}
+  if(invalidDateRange(startDate,endDate)||invalidDateRange(issueDate,endDate))return res.status(400).json({message:'Даты визы указаны некорректно'})
   const r=await query(`UPDATE visas v SET visa_type=COALESCE($1,v.visa_type),visa_number=$2,issue_date=$3,start_date=$4,end_date=COALESCE($5,v.end_date),status=COALESCE($6,v.status),notes=$7
     FROM foreigners f WHERE v.id=$8 AND v.foreigner_id=f.id AND f.organization_id=$9 RETURNING v.*`,
     [visaType,visaNumber||null,issueDate||null,startDate||null,endDate,status||null,notes||null,req.params.id,req.user.organization_id])
