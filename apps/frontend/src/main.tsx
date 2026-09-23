@@ -234,6 +234,7 @@ function App(){
     if(!confirm('Удалить прикрепленный файл?'))return
     try{await api('/files/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}
   }
+  async function uploadAttachment(e:any){const f=e.target.files?.[0];if(!f)return;if(f.size>1500000){setError('Файл слишком большой. Максимум 1.5 МБ.');return}const reader=new FileReader();reader.onload=()=>setFile({fileName:f.name,fileUrl:String(reader.result),fileType:f.type,fileSize:String(f.size)});reader.readAsDataURL(f)}
   function readAttachment(e:any){
     const f=e.target.files?.[0];if(!f)return
     if(f.size>1500000){setError('Файл слишком большой. Максимум 1.5 МБ.');return}
