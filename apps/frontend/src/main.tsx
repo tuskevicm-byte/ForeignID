@@ -235,7 +235,7 @@ function App(){
   }
   function editRegistration(r:any){setEditingRegistrationId(r.id);setRegistration({registrationType:r.registration_type||'TEMPORARY_STAY',registrationNumber:r.registration_number||'',startDate:r.start_date||'',endDate:r.end_date||'',governmentReference:r.government_reference||''});setError('')}
   async function deleteRegistration(id:string){if(!confirm('Удалить регистрацию?'))return;try{await api('/registrations/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
-  async async function downloadFile(id:string,name:string){try{const res=await fetch(API+'/files/'+id+'/download',{headers:{Authorization:'Bearer '+token}});if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.message||'Не удалось скачать файл')}const blob=await res.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e:any){setError(e.message)}}
+  async function downloadFile(id:string,name:string){try{const res=await fetch(API+'/files/'+id+'/download',{headers:{Authorization:'Bearer '+token}});if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.message||'Не удалось скачать файл')}const blob=await res.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e:any){setError(e.message)}}
   async function saveFile(e:any){
     e.preventDefault(); if(!selected||!file.fileName||!file.fileUrl)return
     setSavingFile(true);setError('')
