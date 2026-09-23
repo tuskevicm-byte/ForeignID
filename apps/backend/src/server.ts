@@ -10,6 +10,22 @@ import {fileURLToPath} from 'node:url'
 
 const app=express()
 
+const storageRoot=path.resolve(process.env.FILE_STORAGE_PATH||'./storage')
+const allowedFileTypes=new Set(['application/pdf','image/jpeg','image/png','image/webp','text/plain'])
+const extensionForType=(type:string)=>({ 'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp','text/plain':'txt' } as any)[type]||'bin'
+async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:string){
+  const match=/^data:([^;]+);base64,(.*)$/.exec(String(fileUrl||''))
+  if(!match)throw new Error('Файл должен быть загружен как data URL')
+  const mime=match[1], raw=match[2]
+  if(!allowedFileTypes.has(mime)||mime!==fileType)throw new Error('Недопустимый тип файла')
+  const buffer=Buffer.from(raw,'base64')
+  if(!buffer.length||buffer.length>1500000)throw new Error('Размер файла должен быть от 1 байта до 1.5 МБ')
+  const dir=path.join(storageRoot,organizationId); await fs.promises.mkdir(dir,{recursive:true})
+  const storedName=crypto.randomUUID()+'.'+extensionForType(mime)
+  const fullPath=path.join(dir,storedName); await fs.promises.writeFile(fullPath,buffer)
+  return {storedName,fullPath,size:buffer.length,mime}
+}
+
 function invalidDateRange(startDate:any,endDate:any){
   return Boolean(startDate&&endDate&&String(startDate)>String(endDate))
 }
@@ -257,17 +273,31 @@ app.delete('/api/v1/visas/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),asyn
   await audit(req,'DELETE','VISA',req.params.id);res.json({ok:true})
 })
 app.post('/api/v1/files',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
-  const {foreignerId,fileName,fileUrl,fileType,fileSize}=req.body||{}
-  if(!foreignerId||!fileName||!fileUrl)return res.status(400).json({message:'Владелец, имя файла и ссылка обязательны'})
+  const {foreignerId,fileName,fileUrl,fileType}=req.body||{}
+  if(!foreignerId||!fileName||!fileUrl||!fileType)return res.status(400).json({message:'Владелец, имя файла, содержимое и тип обязательны'})
   const own=await query('SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2',[foreignerId,req.user.organization_id])
   if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
-  const r=await query('INSERT INTO foreigner_files(foreigner_id,file_name,file_url,file_type,file_size) VALUES($1,$2,$3,$4,$5) RETURNING *',[foreignerId,fileName,fileUrl,fileType||null,fileSize||null])
-  await audit(req,'CREATE','FILE',r.rows[0].id,{fileName});res.status(201).json(r.rows[0])
+  try{
+    const stored=await storeProtectedFile(req.user.organization_id,fileUrl,fileType)
+    const r=await query('INSERT INTO foreigner_files(foreigner_id,file_name,file_url,file_type,file_size) VALUES($1,$2,$3,$4,$5) RETURNING *',[foreignerId,fileName,stored.storedName,stored.mime,stored.size])
+    await audit(req,'CREATE','FILE',r.rows[0].id,{fileName,fileSize:stored.size})
+    res.status(201).json({...r.rows[0],downloadUrl:'/api/v1/files/'+r.rows[0].id+'/download'})
+  }catch(e:any){res.status(400).json({message:e?.message||'Не удалось сохранить файл'})}
+})
+app.get('/api/v1/files/:id/download',requireAuth,async(req:AuthRequest,res)=>{
+  const r=await query('SELECT ff.*,f.organization_id FROM foreigner_files ff JOIN foreigners f ON f.id=ff.foreigner_id WHERE ff.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
+  if(!r.rowCount)return res.status(404).json({message:'Файл не найден'})
+  const file=r.rows[0], fullPath=path.join(storageRoot,req.user.organization_id,file.file_url)
+  try{await fs.promises.access(fullPath);res.type(file.file_type||'application/octet-stream');res.setHeader('Content-Disposition','attachment; filename*=UTF-8\'\''+encodeURIComponent(file.file_name));return res.sendFile(fullPath)}
+  catch{return res.status(404).json({message:'Файл отсутствует в хранилище'})}
 })
 app.delete('/api/v1/files/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
-  const r=await query('DELETE FROM foreigner_files ff USING foreigners f WHERE ff.id=$1 AND ff.foreigner_id=f.id AND f.organization_id=$2 RETURNING ff.id,ff.file_name',[req.params.id,req.user.organization_id])
+  const r=await query('SELECT ff.file_url,ff.file_name,f.organization_id FROM foreigner_files ff JOIN foreigners f ON f.id=ff.foreigner_id WHERE ff.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
   if(!r.rowCount)return res.status(404).json({message:'Файл не найден'})
-  await audit(req,'DELETE','FILE',req.params.id,{fileName:r.rows[0].file_name});res.json({ok:true})
+  const file=r.rows[0]
+  if(!String(file.file_url).startsWith('data:')){try{await fs.promises.unlink(path.join(storageRoot,req.user.organization_id,file.file_url))}catch{}}
+  await query('DELETE FROM foreigner_files WHERE id=$1',[req.params.id])
+  await audit(req,'DELETE','FILE',req.params.id,{fileName:file.file_name});res.json({ok:true})
 })
 
 app.get('/api/v1/notifications',requireAuth,async(req:AuthRequest,res)=>{
