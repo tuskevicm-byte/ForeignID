@@ -243,7 +243,9 @@ app.post('/api/v1/registrations',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OP
 })
 app.patch('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {registrationType,registrationNumber,startDate,endDate,status,governmentReference}=req.body||{}
+  if(hasInvalidDate(startDate,endDate))return res.status(400).json({message:'Некорректная дата регистрации'})
   if(invalidDateRange(startDate,endDate))return res.status(400).json({message:'Дата начала регистрации не может быть позже даты окончания'})
+  if(!endDate)return res.status(400).json({message:'Дата окончания регистрации обязательна'})
   const r=await query(`UPDATE registrations r SET registration_type=COALESCE($1,r.registration_type),registration_number=$2,start_date=$3,end_date=COALESCE($4,r.end_date),status=COALESCE($5,r.status),government_reference=$6
     FROM foreigners f WHERE r.id=$7 AND r.foreigner_id=f.id AND f.organization_id=$8 RETURNING r.*`,
     [registrationType,registrationNumber||null,startDate||null,endDate,status||null,governmentReference||null,req.params.id,req.user.organization_id])
@@ -257,7 +259,9 @@ app.delete('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMI
 })
 app.patch('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {documentType,documentNumber,issuingCountry,issueDate,expiryDate}=req.body||{}
+  if(hasInvalidDate(issueDate,expiryDate))return res.status(400).json({message:'Некорректная дата документа'})
   if(invalidDateRange(issueDate,expiryDate))return res.status(400).json({message:'Дата выдачи документа не может быть позже даты окончания'})
+  if(!documentType||!documentNumber||!expiryDate)return res.status(400).json({message:'Тип, номер и срок действия документа обязательны'})
   const r=await query(`UPDATE identity_documents d SET document_type=COALESCE($1,d.document_type),document_number=COALESCE($2,d.document_number),
     issuing_country=$3,issue_date=$4,expiry_date=COALESCE($5,d.expiry_date)
     FROM foreigners f WHERE d.id=$6 AND d.foreigner_id=f.id AND f.organization_id=$7 RETURNING d.*`,
@@ -272,7 +276,9 @@ app.delete('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),
 })
 app.patch('/api/v1/visas/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {visaType,visaNumber,issueDate,startDate,endDate,status,notes}=req.body||{}
+  if(hasInvalidDate(issueDate,startDate,endDate))return res.status(400).json({message:'Некорректная дата визы'})
   if(invalidDateRange(startDate,endDate)||invalidDateRange(issueDate,endDate))return res.status(400).json({message:'Даты визы указаны некорректно'})
+  if(!visaType||!endDate)return res.status(400).json({message:'Тип визы и дата окончания обязательны'})
   const r=await query(`UPDATE visas v SET visa_type=COALESCE($1,v.visa_type),visa_number=$2,issue_date=$3,start_date=$4,end_date=COALESCE($5,v.end_date),status=COALESCE($6,v.status),notes=$7
     FROM foreigners f WHERE v.id=$8 AND v.foreigner_id=f.id AND f.organization_id=$9 RETURNING v.*`,
     [visaType,visaNumber||null,issueDate||null,startDate||null,endDate,status||null,notes||null,req.params.id,req.user.organization_id])
