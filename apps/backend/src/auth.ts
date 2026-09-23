@@ -1,3 +1,4 @@
+declare module 'bcryptjs' { const bcrypt: any; export = bcrypt }
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import {Request,Response,NextFunction} from 'express'
