@@ -253,18 +253,45 @@ app.get('/api/v1/history',requireAuth,async(req:AuthRequest,res)=>{
 })
 
 app.get('/api/v1/applications',requireAuth,async(req:AuthRequest,res)=>{
-  const r=await query(`SELECT a.*,f.first_name,f.last_name FROM government_applications a LEFT JOIN foreigners f ON f.id=a.foreigner_id
+  const r=await query(`SELECT a.*,f.first_name,f.last_name,
+    (SELECT count(*)::int FROM government_integration_logs l WHERE l.application_id=a.id) integration_attempts,
+    (SELECT message FROM government_application_status_history h WHERE h.application_id=a.id ORDER BY h.created_at DESC LIMIT 1) last_status_message
+    FROM government_applications a LEFT JOIN foreigners f ON f.id=a.foreigner_id
     WHERE a.organization_id=$1 ORDER BY a.created_at DESC`,[req.user.organization_id]);res.json({data:r.rows})
+})
+
+app.get('/api/v1/government/applications/:id/logs',requireAuth,async(req:AuthRequest,res)=>{
+  const own=await query('SELECT id FROM government_applications WHERE id=$1 AND organization_id=$2',[req.params.id,req.user.organization_id])
+  if(!own.rowCount)return res.status(404).json({message:'Заявка не найдена'})
+  const [history,logs]=await Promise.all([
+    query('SELECT * FROM government_application_status_history WHERE application_id=$1 ORDER BY created_at DESC',[req.params.id]),
+    query('SELECT id,direction,http_status,error,created_at FROM government_integration_logs WHERE application_id=$1 ORDER BY created_at DESC',[req.params.id])
+  ])
+  res.json({history:history.rows,logs:logs.rows})
 })
 
 app.post('/api/v1/government/applications',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {foreignerId,serviceType}=req.body||{}
   if(!foreignerId||!serviceType)return res.status(400).json({message:'Иностранец и услуга обязательны'})
-  const own=await query("SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2 AND status<>'ARCHIVED'",[foreignerId,req.user.organization_id])
+  const own=await query(`SELECT id,first_name,middle_name,last_name,citizenship,birth_date,gender,phone,email,entry_date,stay_basis,stay_address
+    FROM foreigners WHERE id=$1 AND organization_id=$2 AND status<>'ARCHIVED'`,[foreignerId,req.user.organization_id])
   if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
-  const r=await query('INSERT INTO government_applications(organization_id,foreigner_id,service_type,status) VALUES($1,$2,$3,$4) RETURNING *',
-    [req.user.organization_id,foreignerId,serviceType,'READY_FOR_OFFICIAL_SUBMISSION'])
+  const requestPayload={serviceType,foreigner:own.rows[0]}
+  const r=await query('INSERT INTO government_applications(organization_id,foreigner_id,service_type,status,request_payload) VALUES($1,$2,$3,$4,$5) RETURNING *',
+    [req.user.organization_id,foreignerId,serviceType,'READY_FOR_OFFICIAL_SUBMISSION',requestPayload])
+  await query('INSERT INTO government_application_status_history(application_id,status,message) VALUES($1,$2,$3)',[r.rows[0].id,'READY_FOR_OFFICIAL_SUBMISSION','Заявка подготовлена; реальная отправка в ОАИС ожидает настройки официального канала.'])
   await audit(req,'CREATE','APPLICATION',r.rows[0].id,{serviceType});res.status(201).json(r.rows[0])
+})
+
+app.post('/api/v1/government/applications/:id/prepare',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
+  const r=await query(`SELECT a.*,f.first_name,f.middle_name,f.last_name,f.citizenship,f.birth_date,f.gender,f.phone,f.email,f.entry_date,f.stay_basis,f.stay_address
+    FROM government_applications a LEFT JOIN foreigners f ON f.id=a.foreigner_id WHERE a.id=$1 AND a.organization_id=$2`,[req.params.id,req.user.organization_id])
+  if(!r.rowCount)return res.status(404).json({message:'Заявка не найдена'})
+  const payload={serviceType:r.rows[0].service_type,foreigner:{id:r.rows[0].foreigner_id,firstName:r.rows[0].first_name,middleName:r.rows[0].middle_name,lastName:r.rows[0].last_name,citizenship:r.rows[0].citizenship,birthDate:r.rows[0].birth_date,gender:r.rows[0].gender,phone:r.rows[0].phone,email:r.rows[0].email,entryDate:r.rows[0].entry_date,stayBasis:r.rows[0].stay_basis,stayAddress:r.rows[0].stay_address}}
+  await query('UPDATE government_applications SET request_payload=$1,status=$2,updated_at=now() WHERE id=$3',[payload,'READY_FOR_OFFICIAL_SUBMISSION',req.params.id])
+  await query('INSERT INTO government_integration_logs(application_id,direction,payload) VALUES($1,$2,$3)',[req.params.id,'OUTBOUND',payload])
+  await query('INSERT INTO government_application_status_history(application_id,status,message) VALUES($1,$2,$3)',[req.params.id,'READY_FOR_OFFICIAL_SUBMISSION','Запрос сформирован, но не отправлен: отсутствуют параметры официального канала ОАИС.'])
+  res.json({ok:true,status:'READY_FOR_OFFICIAL_SUBMISSION',payload})
 })
 
 const schemaPath=path.join(path.dirname(fileURLToPath(import.meta.url)),'schema.sql')
