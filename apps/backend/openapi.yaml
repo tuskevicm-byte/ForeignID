@@ -1,0 +1,61 @@
+openapi: 3.0.3
+info:
+  title: ForeignID API
+  version: 1.0.0
+  description: API for foreigner records and preparation of electronic-service requests. Official OAIS transport is intentionally separated from the application API until the service-specific NCE contract is configured.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /applications:
+    get:
+      summary: List government applications
+      responses:
+        '200': { description: Application list }
+  /government/applications:
+    post:
+      summary: Create an electronic-service application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplication'
+      responses:
+        '201': { description: Application created }
+        '400': { description: Invalid request }
+  /government/applications/{id}/prepare:
+    post:
+      summary: Build and record the outbound OAIS request payload
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Payload prepared; not sent to OAIS }
+        '404': { description: Application not found }
+  /government/applications/{id}/logs:
+    get:
+      summary: Get application status and integration history
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Integration history }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    CreateApplication:
+      type: object
+      required: [foreignerId, serviceType]
+      properties:
+        foreignerId: { type: string, format: uuid }
+        serviceType: { type: string }
