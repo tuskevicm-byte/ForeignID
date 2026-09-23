@@ -37,6 +37,8 @@ function App(){
   const [applicationLogsId,setApplicationLogsId]=React.useState<string|null>(null)
   const [users,setUsers]=React.useState<any[]>([])
   const [notifications,setNotifications]=React.useState<any[]>([])
+  const [photoSrc,setPhotoSrc]=React.useState('')
+
   const [userForm,setUserForm]=React.useState({email:'',password:'',firstName:'',lastName:'',role:'OPERATOR',isActive:true})
   const [editingUserId,setEditingUserId]=React.useState<string|null>(null)
   const [topDocForeignerId,setTopDocForeignerId]=React.useState('')
@@ -149,6 +151,19 @@ function App(){
   React.useEffect(()=>{loadForeigners()},[token,q,foreignerPage])
   React.useEffect(()=>{setSectionPage(1)},[active])
   React.useEffect(()=>{loadSection()},[token,active,sectionPage])
+  React.useEffect(()=>{
+    let objectUrl=''
+    const source=selected?.foreigner?.photo_url||''
+    if(!source){setPhotoSrc('');return}
+    if(String(source).startsWith('data:')){setPhotoSrc(source);return}
+    const url=String(source).startsWith('/api/')?API+String(source):String(source)
+    fetch(url,{headers:{Authorization:'Bearer '+token}})
+      .then(async r=>{if(!r.ok)throw new Error('Не удалось загрузить фото');return r.blob()})
+      .then(blob=>{objectUrl=URL.createObjectURL(blob);setPhotoSrc(objectUrl)})
+      .catch(()=>setPhotoSrc(''))
+    return()=>{if(objectUrl)URL.revokeObjectURL(objectUrl)}
+  },[token,selected?.foreigner?.photo_url])
+
   React.useEffect(()=>{if(token)loadNotifications()},[token,active])
   React.useEffect(()=>{if(token&&['SUPER_ADMIN','ORG_ADMIN'].includes(currentUser?.role)&&active==='Настройки')loadUsers()},[token,active,currentUser?.role])
 
@@ -331,7 +346,7 @@ function App(){
     return <>
       <button className="back" onClick={()=>setSelected(null)}>← К списку</button>
       <div className="page-title-row">
-        <div className="person-title">{f.photo_url?<img className="avatar" src={f.photo_url}/>:<div className="avatar placeholder">Фото</div>}
+        <div className="person-title">{photoSrc?<img className="avatar" src={photoSrc}/>:<div className="avatar placeholder">Фото</div>}
           <div><h1>{f.last_name} {f.first_name} {f.middle_name||''}</h1><p className="muted">{f.citizenship} · <span className="ok">Активен</span></p></div>
         </div>
         <div>{canWrite&&<button className="primary" onClick={startEdit}>Редактировать</button>} {canDelete&&<button onClick={()=>archive(f.id)}>Архивировать</button>}</div>
