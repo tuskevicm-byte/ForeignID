@@ -37,6 +37,36 @@ app.post('/api/v1/auth/login',async(req,res)=>{
 
 app.get('/api/v1/auth/me',requireAuth,(req:AuthRequest,res)=>res.json({user:req.user}))
 
+app.get('/api/v1/users',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
+  const r=await query('SELECT id,email,first_name,last_name,role,is_active,created_at FROM users WHERE organization_id=$1 ORDER BY created_at DESC',[req.user.organization_id])
+  res.json({data:r.rows})
+})
+
+app.post('/api/v1/users',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
+  const {email,password,firstName,lastName,role='OPERATOR'}=req.body||{}
+  if(!email||!password||!firstName||!lastName)return res.status(400).json({message:'Email, пароль, имя и фамилия обязательны'})
+  if(!['ORG_ADMIN','OPERATOR','VIEWER'].includes(role))return res.status(400).json({message:'Недопустимая роль'})
+  if(req.user.role==='ORG_ADMIN' && role==='ORG_ADMIN')return res.status(403).json({message:'ORG_ADMIN не может создавать другого администратора'})
+  const {hashPassword}=await import('./auth.js')
+  const hash=await hashPassword(password)
+  try{
+    const r=await query('INSERT INTO users(organization_id,email,password_hash,first_name,last_name,role) VALUES($1,lower($2),$3,$4,$5,$6) RETURNING id,email,first_name,last_name,role,is_active,created_at',[req.user.organization_id,email,hash,firstName,lastName,role])
+    await audit(req,'CREATE','USER',r.rows[0].id,{email,role});res.status(201).json(r.rows[0])
+  }catch(e:any){if(e?.code==='23505')return res.status(409).json({message:'Пользователь с таким email уже существует'});throw e}
+})
+
+app.patch('/api/v1/users/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
+  const {firstName,lastName,role,isActive,password}=req.body||{}
+  const own=await query('SELECT * FROM users WHERE id=$1 AND organization_id=$2',[req.params.id,req.user.organization_id])
+  if(!own.rowCount)return res.status(404).json({message:'Пользователь не найден'})
+  if(req.params.id===req.user.id && isActive===false)return res.status(400).json({message:'Нельзя деактивировать текущего пользователя'})
+  if(req.user.role==='ORG_ADMIN' && role==='ORG_ADMIN' && own.rows[0].role!=='ORG_ADMIN')return res.status(403).json({message:'ORG_ADMIN не может назначать роль администратора'})
+  const {hashPassword}=await import('./auth.js')
+  const hash=password?await hashPassword(password):null
+  const r=await query('UPDATE users SET first_name=COALESCE($1,first_name),last_name=COALESCE($2,last_name),role=COALESCE($3,role),is_active=COALESCE($4,is_active),password_hash=COALESCE($5,password_hash) WHERE id=$6 AND organization_id=$7 RETURNING id,email,first_name,last_name,role,is_active,created_at',[firstName||null,lastName||null,role||null,isActive??null,hash,req.params.id,req.user.organization_id])
+  await audit(req,'UPDATE','USER',req.params.id,{role,isActive});res.json(r.rows[0])
+})
+
 app.get('/api/v1/dashboard',requireAuth,async(req:AuthRequest,res)=>{
   const [f,d,v,r,a]=await Promise.all([
     query('SELECT count(*)::int count FROM foreigners WHERE organization_id=$1 AND status<>$2',[req.user.organization_id,'ARCHIVED']),
