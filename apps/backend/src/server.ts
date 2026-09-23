@@ -61,7 +61,7 @@ app.get('/api/v1/foreigners',requireAuth,async(req:AuthRequest,res)=>{
     FROM foreigners f WHERE f.organization_id=$1`
   if(q){params.push(`%${q}%`);sql+=' AND (f.first_name ILIKE $2 OR f.last_name ILIKE $2 OR f.middle_name ILIKE $2 OR f.citizenship ILIKE $2 OR f.phone ILIKE $2 OR f.email ILIKE $2 OR EXISTS (SELECT 1 FROM identity_documents sd WHERE sd.foreigner_id=f.id AND sd.document_number ILIKE $2))'}
   sql+=' AND f.status<>\'ARCHIVED\''
-  const countSql=sql.replace(/SELECT f\\.[\\s\\S]*?FROM foreigners f WHERE/,'SELECT COUNT(*)::int AS total FROM foreigners f WHERE').replace(/ ORDER BY f\\.created_at DESC$/,'')
+  const countSql=sql.replace(/SELECT f\.[\s\S]*?FROM foreigners f WHERE/,'SELECT COUNT(*)::int AS total FROM foreigners f WHERE')
   const count=await query(countSql,params)
   sql+=' ORDER BY f.created_at DESC LIMIT 
 })
