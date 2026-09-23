@@ -343,10 +343,11 @@ app.get('/api/v1/files/:id/download',requireAuth,async(req:AuthRequest,res)=>{
   }catch{return res.status(404).json({message:'Файл отсутствует в хранилище'})}
 })
 app.delete('/api/v1/files/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
-  const r=await query('SELECT ff.file_url,ff.file_name,f.organization_id FROM foreigner_files ff JOIN foreigners f ON f.id=ff.foreigner_id WHERE ff.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
+  const r=await query('SELECT ff.file_url,ff.file_name,ff.kind,f.id AS foreigner_id,f.organization_id FROM foreigner_files ff JOIN foreigners f ON f.id=ff.foreigner_id WHERE ff.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
   if(!r.rowCount)return res.status(404).json({message:'Файл не найден'})
   const file=r.rows[0]
   if(!String(file.file_url).startsWith('data:')){try{await fs.promises.unlink(path.join(storageRoot,req.user.organization_id,file.file_url))}catch{}}
+  if(file.kind==='PHOTO') await query('UPDATE foreigners SET photo_url=NULL,updated_at=now() WHERE id=$1 AND organization_id=$2',[file.foreigner_id,req.user.organization_id])
   await query('DELETE FROM foreigner_files WHERE id=$1',[req.params.id])
   await audit(req,'DELETE','FILE',req.params.id,{fileName:file.file_name});res.json({ok:true})
 })
