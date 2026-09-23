@@ -289,7 +289,7 @@ function App(){
         </div>
         <div className="panel pad"><h2>Прикрепленные файлы</h2>
           {canWrite&&<form onSubmit={saveFile} className="stack"><input type="file" onChange={readAttachment} required/><input placeholder="Имя файла" value={file.fileName} onChange={e=>setFile({...file,fileName:e.target.value})}/><input placeholder="Ссылка на файл" value={file.fileUrl} onChange={e=>setFile({...file,fileUrl:e.target.value})}/><button className="primary" disabled={savingFile}>{savingFile?'Сохранение...':'Прикрепить файл'}</button></form>}
-          {files.map((x:any)=><div className="record" key={x.id}><span>{x.file_name} {x.file_size?"· "+Math.round(Number(x.file_size)/1024)+" КБ":""}</span><span><a href={x.file_url} target="_blank" rel="noreferrer">Открыть</a> <button type="button" onClick={()=>deleteFile(x.id)}>Удалить</button></span></div>)}
+          {files.map((x:any)=><div className="record" key={x.id}><span>{x.file_name} {x.file_size?"· "+Math.round(Number(x.file_size)/1024)+" КБ":""}</span><span><a href={x.file_url} target="_blank" rel="noreferrer">Открыть</a> {canDelete&&<button type="button" onClick={()=>deleteFile(x.id)}>Удалить</button>}</span></div>)}
         </div>
       </div>}
 
