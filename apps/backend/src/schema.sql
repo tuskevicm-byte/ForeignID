@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS foreigner_files (
   file_url text NOT NULL,
   file_type text,
   file_size bigint,
+  kind text NOT NULL DEFAULT 'ATTACHMENT',
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
