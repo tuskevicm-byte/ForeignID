@@ -37,7 +37,7 @@ function App(){
   const [applicationLogsId,setApplicationLogsId]=React.useState<string|null>(null)
   const [users,setUsers]=React.useState<any[]>([])
   const [notifications,setNotifications]=React.useState<any[]>([])
-  const [userForm,setUserForm]=React.useState({email:'',password:'',firstName:'',lastName:'',role:'OPERATOR'})
+  const [userForm,setUserForm]=React.useState({email:'',password:'',firstName:'',lastName:'',role:'OPERATOR',isActive:true})
   const [editingUserId,setEditingUserId]=React.useState<string|null>(null)
   const [topDocForeignerId,setTopDocForeignerId]=React.useState('')
   const [topDoc,setTopDoc]=React.useState({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''})
