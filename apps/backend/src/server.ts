@@ -300,6 +300,22 @@ app.delete('/api/v1/visas/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),asyn
   if(!r.rowCount)return res.status(404).json({message:'Виза не найдена'})
   await audit(req,'DELETE','VISA',req.params.id);res.json({ok:true})
 })
+app.post('/api/v1/photos',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
+  const {foreignerId,fileUrl}=req.body||{}
+  if(!foreignerId||!fileUrl)return res.status(400).json({message:'Иностранец и фото обязательны'})
+  const own=await query('SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2',[foreignerId,req.user.organization_id])
+  if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
+  try{
+    const stored=await storeProtectedPhoto(req.user.organization_id,fileUrl)
+    const r=await query("INSERT INTO foreigner_files(foreigner_id,file_name,file_url,file_type,file_size,kind) VALUES($1,$2,$3,$4,$5,'PHOTO') RETURNING id,file_name,file_type,file_size,kind",[
+      foreignerId,'photo'+extensionForType(stored.mime),stored.storedName,stored.mime,stored.size
+    ])
+    await query('UPDATE foreigners SET photo_url=$1,updated_at=now() WHERE id=$2 AND organization_id=$3',['/api/v1/files/'+r.rows[0].id+'/download',foreignerId,req.user.organization_id])
+    await audit(req,'UPDATE','FOREIGNER',foreignerId,{photoFileId:r.rows[0].id})
+    res.status(201).json(r.rows[0])
+  }catch(e:any){res.status(400).json({message:e?.message||'Не удалось сохранить фото'})}
+})
+
 app.post('/api/v1/files',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {foreignerId,fileName,fileUrl,fileType}=req.body||{}
   if(!foreignerId||!fileName||!fileUrl||!fileType)return res.status(400).json({message:'Владелец, имя файла, содержимое и тип обязательны'})
