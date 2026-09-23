@@ -211,7 +211,8 @@ app.delete('/api/v1/files/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),asyn
 })
 
 app.get('/api/v1/deadlines',requireAuth,async(req:AuthRequest,res)=>{
-  const r=await query(`SELECT * FROM (
+  const page=Math.max(1,Number(req.query.page)||1),pageSize=Math.min(100,Math.max(1,Number(req.query.pageSize)||25)),offset=(page-1)*pageSize
+  const base=`SELECT * FROM (
     SELECT f.id foreigner_id,f.first_name,f.last_name,'Документ' item_type,d.document_type item_name,d.expiry_date end_date FROM identity_documents d JOIN foreigners f ON f.id=d.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED'
     UNION ALL
     SELECT f.id,f.first_name,f.last_name,'Виза',v.visa_type,v.end_date FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED'
@@ -219,8 +220,11 @@ app.get('/api/v1/deadlines',requireAuth,async(req:AuthRequest,res)=>{
     SELECT f.id,f.first_name,f.last_name,'Регистрация',r.registration_type,r.end_date FROM registrations r JOIN foreigners f ON f.id=r.foreigner_id WHERE f.organization_id=$1 AND f.status<>'ARCHIVED'
     UNION ALL
     SELECT f.id,f.first_name,f.last_name,'Страховка','Страховой полис',f.insurance_end_date FROM foreigners f WHERE f.organization_id=$1 AND f.status<>'ARCHIVED' AND f.insurance_end_date IS NOT NULL
-  ) x WHERE end_date IS NOT NULL ORDER BY end_date ASC`,[req.user.organization_id])
-  res.json({data:r.rows.map((x:any)=>{const daysLeft=Math.ceil((new Date(x.end_date).getTime()-Date.now())/86400000);return {...x,days_left:daysLeft,deadline_status:daysLeft<0?'EXPIRED':daysLeft<=30?'WARNING':'NORMAL',deadline_level:daysLeft<0?'EXPIRED':daysLeft<=1?'1_DAY':daysLeft<=3?'3_DAYS':daysLeft<=7?'7_DAYS':daysLeft<=14?'14_DAYS':daysLeft<=30?'30_DAYS':'NORMAL'}})})
+  ) x WHERE end_date IS NOT NULL`
+  const count=await query(`SELECT COUNT(*)::int AS total FROM (${base}) x`,[req.user.organization_id])
+  const r=await query(base+' ORDER BY end_date ASC LIMIT $2 OFFSET $3',[req.user.organization_id,pageSize,offset])
+  const map=(x:any)=>{const daysLeft=Math.ceil((new Date(x.end_date).getTime()-Date.now())/86400000);return {...x,days_left:daysLeft,deadline_status:daysLeft<0?'EXPIRED':daysLeft<=30?'WARNING':'NORMAL',deadline_level:daysLeft<0?'EXPIRED':daysLeft<=1?'1_DAY':daysLeft<=3?'3_DAYS':daysLeft<=7?'7_DAYS':daysLeft<=14?'14_DAYS':daysLeft<=30?'30_DAYS':'NORMAL'}}
+  res.json({data:r.rows.map(map),total:Number(count.rows[0]?.total||0),page,pageSize})
 })
 
 app.get('/api/v1/diagnostics/visa-distribution',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
