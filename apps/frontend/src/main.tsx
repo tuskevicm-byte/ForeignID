@@ -225,6 +225,7 @@ function App(){
   }
   function editRegistration(r:any){setEditingRegistrationId(r.id);setRegistration({registrationType:r.registration_type||'TEMPORARY_STAY',registrationNumber:r.registration_number||'',startDate:r.start_date||'',endDate:r.end_date||'',governmentReference:r.government_reference||''});setError('')}
   async function deleteRegistration(id:string){if(!confirm('Удалить регистрацию?'))return;try{await api('/registrations/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
+  async function downloadFile(id:string,name:string){try{const res=await fetch(API+'/files/'+id+'/download',{headers:{Authorization:'Bearer '+token}});if(!res.ok)throw new Error('Не удалось скачать файл');const blob=await res.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e:any){setError(e.message)}}
   async function saveFile(e:any){
     e.preventDefault(); if(!selected||!file.fileName||!file.fileUrl)return
     setSavingFile(true);setError('')
@@ -322,8 +323,8 @@ function App(){
           {docs.map((d:any)=><div className="record" key={d.id}><span>{d.document_type} №{d.document_number} · до {d.expiry_date||'—'}</span><span>{canWrite&&<button type="button" onClick={()=>editDoc(d)}>Редактировать</button>} {canDelete&&<button type="button" onClick={()=>deleteDoc(d.id)}>Удалить</button>}</span></div>)}
         </div>
         <div className="panel pad"><h2>Прикрепленные файлы</h2>
-          {canWrite&&<form onSubmit={saveFile} className="stack"><input type="file" onChange={readAttachment} required/><input placeholder="Имя файла" value={file.fileName} onChange={e=>setFile({...file,fileName:e.target.value})}/><input placeholder="Ссылка на файл" value={file.fileUrl} onChange={e=>setFile({...file,fileUrl:e.target.value})}/><button className="primary" disabled={savingFile}>{savingFile?'Сохранение...':'Прикрепить файл'}</button></form>}
-          {files.map((x:any)=><div className="record" key={x.id}><span>{x.file_name} {x.file_size?"· "+Math.round(Number(x.file_size)/1024)+" КБ":""}</span><span><a href={x.file_url} target="_blank" rel="noreferrer">Открыть</a> {canDelete&&<button type="button" onClick={()=>deleteFile(x.id)}>Удалить</button>}</span></div>)}
+          {canWrite&&<form onSubmit={saveFile} className="stack"><input type="file" onChange={readAttachment} required/><input placeholder="Имя файла" value={file.fileName} onChange={e=>setFile({...file,fileName:e.target.value})}/><input type="hidden" value={file.fileUrl} readOnly/><button className="primary" disabled={savingFile}>{savingFile?'Сохранение...':'Прикрепить файл'}</button></form>}
+          {files.map((x:any)=><div className="record" key={x.id}><span>{x.file_name} {x.file_size?"· "+Math.round(Number(x.file_size)/1024)+" КБ":""}</span><span><button type="button" onClick={()=>downloadFile(x.id,x.file_name)}>Открыть</button> {canDelete&&<button type="button" onClick={()=>deleteFile(x.id)}>Удалить</button>}</span></div>)}
         </div>
       </div>}
 
