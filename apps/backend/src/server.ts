@@ -28,8 +28,14 @@ async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:
   return {storedName,fullPath,size:buffer.length,mime}
 }
 
+function isValidDate(value:any){
+  return value==null||value===''||(/^\\d{4}-\\d{2}-\\d{2}$/.test(String(value)) && !Number.isNaN(Date.parse(String(value)+'T00:00:00Z')))
+}
 function invalidDateRange(startDate:any,endDate:any){
   return Boolean(startDate&&endDate&&String(startDate)>String(endDate))
+}
+function hasInvalidDate(...values:any[]){
+  return values.some(value=>!isValidDate(value))
 }
 app.use(cors())
 app.use(express.json({limit:'2mb'}))
@@ -164,8 +170,7 @@ app.patch('/api/v1/foreigners/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','
   const {firstName,middleName,lastName,citizenship,birthDate,gender,phone,email,entryDate,stayBasis,stayAddress,insuranceCompany,insurancePolicyNumber,insuranceEndDate,photoUrl}=req.body||{}
   const requestedStatus=req.body?.status
   if(requestedStatus!==undefined && !['SUPER_ADMIN','ORG_ADMIN'].includes(req.user.role))return res.status(403).json({message:'Недостаточно прав для изменения статуса'})
-  if(birthDate && !/^\\d{4}-\\d{2}-\\d{2}$/.test(birthDate))return res.status(400).json({message:'Некорректная дата рождения'})
-  if(insuranceEndDate && !/^\\d{4}-\\d{2}-\\d{2}$/.test(insuranceEndDate))return res.status(400).json({message:'Некорректная дата окончания страховки'})
+  if(hasInvalidDate(birthDate,entryDate,insuranceEndDate))return res.status(400).json({message:'Некорректный формат даты. Используйте ГГГГ-ММ-ДД'})
   const r=await query(`UPDATE foreigners SET first_name=COALESCE($1,first_name),middle_name=$2,last_name=COALESCE($3,last_name),
     citizenship=COALESCE($4,citizenship),birth_date=$5,gender=$6,phone=$7,email=$8,entry_date=$9,stay_basis=$10,stay_address=$11,
     insurance_company=$12,insurance_policy_number=$13,insurance_end_date=$14,photo_url=$15,status=CASE WHEN $16::text IS NULL THEN status ELSE $16 END,updated_at=now()
