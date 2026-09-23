@@ -186,11 +186,13 @@ function App(){
       if(registrationStarted&&!registration.endDate)throw new Error('Для регистрации укажите дату окончания.')
       let foreignerId=editing?selected.foreigner.id:''
       if(editing){
-        await api('/foreigners/'+selected.foreigner.id,{method:'PATCH',body:JSON.stringify(payload)})
+        await api('/foreigners/'+selected.foreigner.id,{method:'PATCH',body:JSON.stringify({...payload,photoUrl:null})})
+        foreignerId=selected.foreigner.id
       }else{
-        const created=await api('/foreigners',{method:'POST',body:JSON.stringify(payload)})
+        const created=await api('/foreigners',{method:'POST',body:JSON.stringify({...payload,photoUrl:null})})
         foreignerId=created.id
       }
+      if(form.photoUrl && form.photoUrl.startsWith('data:')) await uploadPhoto(foreignerId,form.photoUrl)
       if(documentStarted){
         const path=editingDocId?'/documents/'+editingDocId:'/documents'
         const method=editingDocId?'PATCH':'POST'
