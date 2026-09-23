@@ -28,6 +28,16 @@ async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:
   return {storedName,fullPath,size:buffer.length,mime}
 }
 
+async function storeProtectedPhoto(organizationId:string,fileUrl:string){
+  return storeProtectedFile(organizationId,fileUrl,'image/jpeg').catch(async()=>{
+    const match=/^data:([^;]+);base64,(.*)$/.exec(String(fileUrl||''))
+    if(!match)throw new Error('Фото должно быть загружено как data URL')
+    const mime=match[1]
+    if(!['image/jpeg','image/png','image/webp'].includes(mime))throw new Error('Недопустимый тип фото')
+    return storeProtectedFile(organizationId,fileUrl,mime)
+  })
+}
+
 function isValidDate(value:any){
   if(value==null||value==='')return true
   const s=String(value)
