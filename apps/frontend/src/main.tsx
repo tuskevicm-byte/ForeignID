@@ -347,8 +347,21 @@ function App(){
     </>
   }
 
-  function exportExcel(){const rows=data.deadlines||[];const esc=(v:any)=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');const html='<table><tr><th>ФИО</th><th>Тип</th><th>Запись</th><th>Срок</th><th>Статус</th></tr>'+rows.map((x:any)=>'<tr><td>'+esc(x.last_name+' '+x.first_name)+'</td><td>'+esc(x.item_type)+'</td><td>'+esc(x.item_name)+'</td><td>'+esc(x.end_date)+'</td><td>'+esc(x.deadline_status)+'</td></tr>').join('')+'</table>';const blob=new Blob(['\\ufeff',html],{type:'application/vnd.ms-excel'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='foreignid-report.xls';a.click();URL.revokeObjectURL(url)}
-  function exportPdf(){const rows=data.deadlines||[];const w=window.open('','_blank');if(!w){setError('Браузер заблокировал окно печати. Разрешите всплывающие окна.');return}w.document.write('<html><head><title>ForeignID — отчет</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:8px;text-align:left}</style></head><body><h1>ForeignID — отчет по срокам</h1><p>Сформировано: '+new Date().toLocaleString()+'</p><table><tr><th>ФИО</th><th>Тип</th><th>Запись</th><th>Срок</th><th>Статус</th></tr>'+rows.map((x:any)=>'<tr><td>'+x.last_name+' '+x.first_name+'</td><td>'+x.item_type+'</td><td>'+x.item_name+'</td><td>'+x.end_date+'</td><td>'+x.deadline_status+'</td></tr>').join('')+'</table></body></html>');w.document.close();w.focus();w.print()}
+  function exportExcel(){
+    const rows=data.deadlines||[]
+    const esc=(v:any)=>{const s=String(v??'');return '"'+s.replace(/"/g,'""')+'"'}
+    const csv='ФИО,Тип,Запись,Срок,Статус\\n'+rows.map((x:any)=>[x.last_name+' '+x.first_name,x.item_type,x.item_name,x.end_date,x.deadline_status].map(esc).join(',')).join('\\n')
+    const blob=new Blob(['\\ufeff',csv],{type:'text/csv;charset=utf-8'})
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='foreignid-report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
+  }
+  function exportPdf(){
+    const rows=data.deadlines||[]
+    const w=window.open('','_blank')
+    if(!w){setError('Браузер заблокировал окно печати. Разрешите всплывающие окна.');return}
+    const esc=(v:any)=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    w.document.write('<html><head><title>ForeignID — отчет</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial;font-size:11px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #777;padding:5px;text-align:left}h1{font-size:18px}</style></head><body><h1>ForeignID — отчет по срокам</h1><p>Сформировано: '+esc(new Date().toLocaleString())+'</p><table><tr><th>ФИО</th><th>Тип</th><th>Запись</th><th>Срок</th><th>Статус</th></tr>'+rows.map((x:any)=>'<tr><td>'+esc(x.last_name+' '+x.first_name)+'</td><td>'+esc(x.item_type)+'</td><td>'+esc(x.item_name)+'</td><td>'+esc(x.end_date)+'</td><td>'+esc(x.deadline_status)+'</td></tr>').join('')+'</table></body></html>')
+    w.document.close();w.focus();setTimeout(()=>w.print(),200)
+  }
   function Section(){
     if(active==='Главная')return Dashboard()
     if(active==='Иностранцы')return Foreigners()
