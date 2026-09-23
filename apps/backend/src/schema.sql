@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS foreigner_files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_foreigner_files_foreigner ON foreigner_files(foreigner_id);
+CREATE INDEX IF NOT EXISTS idx_foreigner_files_photo ON foreigner_files(foreigner_id, kind) WHERE kind='PHOTO';
 
 
 ALTER TABLE government_applications ADD COLUMN IF NOT EXISTS external_status text;
