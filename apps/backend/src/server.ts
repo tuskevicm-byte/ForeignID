@@ -85,12 +85,16 @@ app.post('/api/v1/foreigners',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERA
 })
 
 app.patch('/api/v1/foreigners/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
-  const {firstName,middleName,lastName,citizenship,birthDate,gender,phone,email,entryDate,stayBasis,stayAddress,insuranceCompany,insurancePolicyNumber,insuranceEndDate,photoUrl,status}=req.body||{}
+  const {firstName,middleName,lastName,citizenship,birthDate,gender,phone,email,entryDate,stayBasis,stayAddress,insuranceCompany,insurancePolicyNumber,insuranceEndDate,photoUrl}=req.body||{}
+  const requestedStatus=req.body?.status
+  if(requestedStatus!==undefined && !['SUPER_ADMIN','ORG_ADMIN'].includes(req.user.role))return res.status(403).json({message:'Недостаточно прав для изменения статуса'})
+  if(birthDate && !/^\\d{4}-\\d{2}-\\d{2}$/.test(birthDate))return res.status(400).json({message:'Некорректная дата рождения'})
+  if(insuranceEndDate && !/^\\d{4}-\\d{2}-\\d{2}$/.test(insuranceEndDate))return res.status(400).json({message:'Некорректная дата окончания страховки'})
   const r=await query(`UPDATE foreigners SET first_name=COALESCE($1,first_name),middle_name=$2,last_name=COALESCE($3,last_name),
     citizenship=COALESCE($4,citizenship),birth_date=$5,gender=$6,phone=$7,email=$8,entry_date=$9,stay_basis=$10,stay_address=$11,
-    insurance_company=$12,insurance_policy_number=$13,insurance_end_date=$14,photo_url=$15,status=COALESCE($16,status),updated_at=now()
+    insurance_company=$12,insurance_policy_number=$13,insurance_end_date=$14,photo_url=$15,status=CASE WHEN $16::text IS NULL THEN status ELSE $16 END,updated_at=now()
     WHERE id=$17 AND organization_id=$18 RETURNING *`,
-    [firstName,middleName||null,lastName,citizenship,birthDate||null,gender||null,phone||null,email||null,entryDate||null,stayBasis||null,stayAddress||null,insuranceCompany||null,insurancePolicyNumber||null,insuranceEndDate||null,photoUrl||null,status,req.params.id,req.user.organization_id])
+    [firstName,middleName||null,lastName,citizenship,birthDate||null,gender||null,phone||null,email||null,entryDate||null,stayBasis||null,stayAddress||null,insuranceCompany||null,insurancePolicyNumber||null,insuranceEndDate||null,photoUrl||null,requestedStatus,req.params.id,req.user.organization_id])
   if(!r.rowCount)return res.status(404).json({message:'Иностранец не найден'})
   await audit(req,'UPDATE','FOREIGNER',req.params.id,{firstName,lastName,status})
   res.json(r.rows[0])
