@@ -114,7 +114,7 @@ function App(){
   async function loadSection(){
     if(!token)return
     try{
-      if(active==='Главная'||active==='Отчёты'){const [d,deadlines]=await Promise.all([api('/dashboard'),api('/deadlines')]);setData({...d,deadlines:deadlines.data||[]})}
+      if(active==='Главная'){const [d,deadlines]=await Promise.all([api('/dashboard'),api('/deadlines')]);setData({...d,deadlines:deadlines.data||[]})} else if(active==='Отчёты'){const [d,report]=await Promise.all([api('/dashboard'),api('/reports/deadlines')]);setData({...d,deadlines:report.data||[]})}
       else if(active==='Контроль сроков')setData(await api('/deadlines?page='+sectionPage+'&pageSize='+sectionPageSize))
       else if(active==='Документы'){const [d,v]=await Promise.all([api('/documents?page='+sectionPage+'&pageSize='+sectionPageSize),api('/visas?page='+sectionPage+'&pageSize='+sectionPageSize)]);setData({documents:d.data||[],visas:v.data||[],documentsTotal:Number(d.total||0),visasTotal:Number(v.total||0)})}
       else if(active==='История')setData(await api('/history?page='+sectionPage+'&pageSize='+sectionPageSize))
