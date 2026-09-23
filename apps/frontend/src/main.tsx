@@ -155,8 +155,10 @@ function App(){
     try{await api('/foreigners/'+id,{method:'DELETE'});setSelected(null);await loadForeigners()}catch(e:any){setError(e.message)}
   }
   async function saveDoc(e:any){
-    e.preventDefault()
+    e.preventDefault();setError('')
     try{
+      if(!doc.documentType||!doc.documentNumber||!doc.expiryDate)throw new Error('Для документа укажите тип, номер и срок действия.')
+      if(doc.issueDate&&doc.issueDate>doc.expiryDate)throw new Error('Дата выдачи документа не может быть позже даты окончания.')
       const path=editingDocId?'/documents/'+editingDocId:'/documents'
       const method=editingDocId?'PATCH':'POST'
       await api(path,{method,body:JSON.stringify(editingDocId?doc:{...doc,foreignerId:selected.foreigner.id})})
@@ -166,14 +168,22 @@ function App(){
   function editDoc(d:any){setEditingDocId(d.id);setDoc({documentType:d.document_type||'Паспорт',documentNumber:d.document_number||'',issuingCountry:d.issuing_country||'',issueDate:d.issue_date||'',expiryDate:d.expiry_date||''});setError('')}
   async function deleteDoc(id:string){if(!confirm('Удалить документ?'))return;try{await api('/documents/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
   async function saveVisa(e:any){
-    e.preventDefault()
-    try{const path=editingVisaId?'/visas/'+editingVisaId:'/visas';const method=editingVisaId?'PATCH':'POST';await api(path,{method,body:JSON.stringify(editingVisaId?visa:{...visa,foreignerId:selected.foreigner.id})});setEditingVisaId(null);setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});await openForeigner(selected.foreigner)}
-    catch(e:any){setError(e.message)}
+    e.preventDefault();setError('')
+    try{
+      if(!visa.visaType||!visa.endDate)throw new Error('Для визы укажите тип и дату окончания.')
+      if(visa.startDate&&visa.startDate>visa.endDate)throw new Error('Дата начала визы не может быть позже даты окончания.')
+      if(visa.issueDate&&visa.issueDate>visa.endDate)throw new Error('Дата выдачи визы не может быть позже даты окончания.')
+      const path=editingVisaId?'/visas/'+editingVisaId:'/visas';const method=editingVisaId?'PATCH':'POST'
+      await api(path,{method,body:JSON.stringify(editingVisaId?visa:{...visa,foreignerId:selected.foreigner.id})})
+      setEditingVisaId(null);setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});await openForeigner(selected.foreigner)
+    }catch(e:any){setError(e.message)}
   }
   async function deleteVisa(id:string){if(!confirm('Удалить визу/разрешение?'))return;try{await api('/visas/'+id,{method:'DELETE'});await openForeigner(selected.foreigner)}catch(e:any){setError(e.message)}}
   async function saveRegistration(e:any){
-    e.preventDefault()
+    e.preventDefault();setError('')
     try{
+      if(!registration.endDate)throw new Error('Для регистрации укажите дату окончания.')
+      if(registration.startDate&&registration.startDate>registration.endDate)throw new Error('Дата начала регистрации не может быть позже даты окончания.')
       const path=editingRegistrationId?'/registrations/'+editingRegistrationId:'/registrations'
       const method=editingRegistrationId?'PATCH':'POST'
       await api(path,{method,body:JSON.stringify(editingRegistrationId?registration:{...registration,foreignerId:selected.foreigner.id})})
