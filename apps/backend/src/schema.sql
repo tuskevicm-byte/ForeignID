@@ -120,3 +120,36 @@ CREATE TABLE IF NOT EXISTS foreigner_files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_foreigner_files_foreigner ON foreigner_files(foreigner_id);
+
+
+ALTER TABLE government_applications ADD COLUMN IF NOT EXISTS external_status text;
+ALTER TABLE government_applications ADD COLUMN IF NOT EXISTS last_request_at timestamptz;
+ALTER TABLE government_applications ADD COLUMN IF NOT EXISTS last_response_at timestamptz;
+ALTER TABLE government_applications ADD COLUMN IF NOT EXISTS last_error text;
+ALTER TABLE government_applications ADD COLUMN IF NOT EXISTS request_payload jsonb;
+ALTER TABLE government_applications ADD COLUMN IF NOT EXISTS response_payload jsonb;
+
+CREATE TABLE IF NOT EXISTS government_application_status_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  application_id uuid NOT NULL REFERENCES government_applications(id) ON DELETE CASCADE,
+  status text NOT NULL,
+  external_status text,
+  message text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS government_integration_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  application_id uuid NOT NULL REFERENCES government_applications(id) ON DELETE CASCADE,
+  direction text NOT NULL CHECK (direction IN ('OUTBOUND','INBOUND')),
+  http_status integer,
+  payload jsonb,
+  response jsonb,
+  error text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_gov_app_status ON government_applications(status);
+CREATE INDEX IF NOT EXISTS idx_gov_app_external_reference ON government_applications(external_reference);
+CREATE INDEX IF NOT EXISTS idx_gov_app_history_application ON government_application_status_history(application_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gov_integration_logs_application ON government_integration_logs(application_id, created_at DESC);
