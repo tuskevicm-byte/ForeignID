@@ -62,7 +62,7 @@ function App(){
   }
   async function loadForeigners(){
     if(!token)return
-    try{const d=await api('/foreigners?q='+encodeURIComponent(q));setForeigners(d.data||[])}
+    try{const d=await api('/foreigners?q='+encodeURIComponent(q)+'&page='+foreignerPage+'&pageSize='+foreignerPageSize);setForeigners(d.data||[]);setForeignerTotal(Number(d.total||0))}
     catch(e:any){setError(e.message)}
   }
   async function createApplication(foreignerId:string){
@@ -120,7 +120,8 @@ function App(){
     if(!token){setCurrentUser(null);return}
     api('/auth/me').then(d=>setCurrentUser(d.user)).catch(()=>{})
   },[token])
-  React.useEffect(()=>{loadForeigners()},[token,q])
+  React.useEffect(()=>{setForeignerPage(1)},[q])
+  React.useEffect(()=>{loadForeigners()},[token,q,foreignerPage])
   React.useEffect(()=>{loadSection()},[token,active])
 
   function startAdd(){setDetailTab('Основная информация');setForm({...blank});setDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''});setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});setRegistration({registrationType:'TEMPORARY_STAY',registrationNumber:'',startDate:'',endDate:'',governmentReference:''});setStep(1);setEditing(false);setEditingDocId(null);setEditingVisaId(null);setEditingRegistrationId(null);setWizard(true);setError('')}
@@ -236,7 +237,7 @@ function App(){
   function Dashboard(){const deadlines=data.deadlines||[];const warning=deadlines.filter((x:any)=>x.deadline_status==='WARNING').length;const expired=deadlines.filter((x:any)=>x.deadline_status==='EXPIRED').length;return <><h1>Главная</h1><p className="muted">Общая информация по иностранным гражданам</p><div className="cards">{stats(data.foreigners,'Всего иностранцев')}{stats(data.visas,'Активные')}{stats(warning,'Срок заканчивается')}{stats(expired,'Просроченные')}{stats(data.registrations,'Регистрации')}</div><div className="grid2"><div className="panel pad"><h2>Что контролируется</h2><p>Документы, визы и разрешения, регистрации, въезд, страхование и история действий.</p></div><div className="panel pad"><h2>Ближайшие сроки</h2>{deadlines.filter((x:any)=>x.deadline_status!=='NORMAL').slice(0,5).map((x:any)=><p key={x.foreigner_id+x.item_type+x.end_date}><b>{x.last_name} {x.first_name}</b> · {x.item_type} · {x.end_date}</p>)}{!warning&&!expired&&<p className="muted">Критичных сроков нет.</p>}</div></div></>}
 
   function Foreigners(){
-    return <><div className="page-title-row"><div><h1>Иностранцы</h1><p className="muted">Список всех иностранных граждан</p></div>{canWrite&&<button className="primary" onClick={startAdd}>+ Добавить</button>}</div>{error&&<div className="error">{error}</div>}<div className="panel"><table><thead><tr><th>ФИО</th><th>Гражданство</th><th>Документ</th><th>Виза / Разрешение</th><th>Регистрация</th><th>Статус</th><th>Действия</th></tr></thead><tbody>{foreigners.filter(x=>x.status!=='ARCHIVED').map(x=><tr key={x.id}><td><button className="link" onClick={()=>openForeigner(x)}>{x.last_name} {x.first_name} {x.middle_name||''}</button></td><td>{x.citizenship}</td><td>{x.document?.document_number||'—'}</td><td>{x.visa?.end_date||'—'}</td><td>{x.registration?.end_date||'—'}</td><td><span className="ok">Активен</span></td><td><button onClick={()=>openForeigner(x)}>Открыть</button></td></tr>)}</tbody></table></div>{wizard&&Wizard()}</>
+    return <><div className="page-title-row"><div><h1>Иностранцы</h1><p className="muted">Список всех иностранных граждан</p></div>{canWrite&&<button className="primary" onClick={startAdd}>+ Добавить</button>}</div>{error&&<div className="error">{error}</div>}<div className="panel"><table><thead><tr><th>ФИО</th><th>Гражданство</th><th>Документ</th><th>Виза / Разрешение</th><th>Регистрация</th><th>Статус</th><th>Действия</th></tr></thead><tbody>{foreigners.filter(x=>x.status!=='ARCHIVED').map(x=><tr key={x.id}><td><button className="link" onClick={()=>openForeigner(x)}>{x.last_name} {x.first_name} {x.middle_name||''}</button></td><td>{x.citizenship}</td><td>{x.document?.document_number||'—'}</td><td>{x.visa?.end_date||'—'}</td><td>{x.registration?.end_date||'—'}</td><td><span className="ok">Активен</span></td><td><button onClick={()=>openForeigner(x)}>Открыть</button></td></tr>)}</tbody></table><div className="page-title-row"><span className="muted">Всего: {foreignerTotal}</span><div><button type="button" disabled={foreignerPage<=1} onClick={()=>setForeignerPage(p=>p-1)}>← Назад</button> <span>Страница {foreignerPage} из {Math.max(1,Math.ceil(foreignerTotal/foreignerPageSize))}</span> <button type="button" disabled={foreignerPage>=Math.max(1,Math.ceil(foreignerTotal/foreignerPageSize))} onClick={()=>setForeignerPage(p=>p+1)}>Вперёд →</button></div></div></div>{wizard&&Wizard()}</>
   }
 
   function Wizard(){
