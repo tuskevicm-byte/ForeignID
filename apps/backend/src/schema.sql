@@ -120,6 +120,12 @@ CREATE TABLE IF NOT EXISTS foreigner_files (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE foreigner_files ADD COLUMN IF NOT EXISTS file_name text;
+ALTER TABLE foreigner_files ADD COLUMN IF NOT EXISTS file_url text;
+ALTER TABLE foreigner_files ADD COLUMN IF NOT EXISTS file_type text;
+ALTER TABLE foreigner_files ADD COLUMN IF NOT EXISTS file_size bigint;
+ALTER TABLE foreigner_files ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'ATTACHMENT';
+
 CREATE INDEX IF NOT EXISTS idx_foreigner_files_foreigner ON foreigner_files(foreigner_id);
 CREATE INDEX IF NOT EXISTS idx_foreigner_files_photo ON foreigner_files(foreigner_id, kind) WHERE kind='PHOTO';
 
