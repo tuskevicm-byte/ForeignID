@@ -29,7 +29,12 @@ async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:
 }
 
 function isValidDate(value:any){
-  return value==null||value===''||(/^\\d{4}-\\d{2}-\\d{2}$/.test(String(value)) && !Number.isNaN(Date.parse(String(value)+'T00:00:00Z')))
+  if(value==null||value==='')return true
+  const s=String(value)
+  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(s))return false
+  const [y,m,d]=s.split('-').map(Number)
+  const dt=new Date(Date.UTC(y,m-1,d))
+  return dt.getUTCFullYear()===y&&dt.getUTCMonth()===m-1&&dt.getUTCDate()===d
 }
 function invalidDateRange(startDate:any,endDate:any){
   return Boolean(startDate&&endDate&&String(startDate)>String(endDate))
@@ -294,9 +299,16 @@ app.post('/api/v1/files',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR')
 app.get('/api/v1/files/:id/download',requireAuth,async(req:AuthRequest,res)=>{
   const r=await query('SELECT ff.*,f.organization_id FROM foreigner_files ff JOIN foreigners f ON f.id=ff.foreigner_id WHERE ff.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
   if(!r.rowCount)return res.status(404).json({message:'Файл не найден'})
-  const file=r.rows[0], fullPath=path.join(storageRoot,req.user.organization_id,file.file_url)
-  try{await fs.promises.access(fullPath);res.type(file.file_type||'application/octet-stream');res.setHeader('Content-Disposition','attachment; filename*=UTF-8\'\''+encodeURIComponent(file.file_name));return res.sendFile(fullPath)}
-  catch{return res.status(404).json({message:'Файл отсутствует в хранилище'})}
+  const file=r.rows[0]
+  const storedName=String(file.file_url||'')
+  if(!/^[a-f0-9-]{36}\.(pdf|jpg|png|webp|txt)$/.test(storedName))return res.status(404).json({message:'Файл отсутствует в защищённом хранилище'})
+  const fullPath=path.join(storageRoot,req.user.organization_id,storedName)
+  try{
+    await fs.promises.access(fullPath)
+    res.type(file.file_type||'application/octet-stream')
+    res.setHeader('Content-Disposition','attachment; filename*=UTF-8\'\''+encodeURIComponent(String(file.file_name||'file')))
+    return res.sendFile(fullPath)
+  }catch{return res.status(404).json({message:'Файл отсутствует в хранилище'})}
 })
 app.delete('/api/v1/files/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
   const r=await query('SELECT ff.file_url,ff.file_name,f.organization_id FROM foreigner_files ff JOIN foreigners f ON f.id=ff.foreigner_id WHERE ff.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
