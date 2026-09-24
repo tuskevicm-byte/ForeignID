@@ -1,7 +1,7 @@
 {
   "name":"foreignid-frontend",
   "private":true,
-  "version":"0.2.1",
+  "version":"0.2.4",
   "type":"module",
   "scripts":{"dev":"vite","start":"vite","build":"vite build","preview":"vite preview"},
   "dependencies":{"@vitejs/plugin-react":"^4.3.0","vite":"^6.0.0","typescript":"^5.7.0","react":"^19.0.0","react-dom":"^19.0.0"},

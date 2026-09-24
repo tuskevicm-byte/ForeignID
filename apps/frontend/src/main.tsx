@@ -1,8 +1,10 @@
+// ForeignID frontend — verified build fix
+// Railway latest source
 import React from 'react'
 import {createRoot} from 'react-dom/client'
 import './styles.css'
 
-const API=import.meta.env.VITE_API_URL||'http://localhost:3000/api/v1'
+const API=import.meta.env.VITE_API_URL||'/api/v1'
 const blank={firstName:'',middleName:'',lastName:'',citizenship:'',birthDate:'',gender:'',phone:'',email:'',entryDate:'',stayBasis:'',stayAddress:'',insuranceCompany:'',insurancePolicyNumber:'',insuranceEndDate:'',photoUrl:''}
 
 function App(){
@@ -409,16 +411,132 @@ function App(){
     w.document.close();w.focus();setTimeout(()=>w.print(),200)
   }
   function Section(){
-    if(active==='Главная')return Dashboard()
-    if(active==='Иностранцы')return Foreigners()
-    if(active==='Настройки')return <div className="stack"><div className="panel pad"><h1>Настройки</h1><h3>Профиль</h3><p><b>Пользователь:</b> {currentUser?.first_name||''} {currentUser?.last_name||''}</p><p><b>Email:</b> {currentUser?.email||'—'}</p><p><b>Роль:</b> {currentUser?.role||'—'}</p></div>{['SUPER_ADMIN','ORG_ADMIN'].includes(currentUser?.role) ? <div className="panel pad"><h2>Пользователи</h2><form onSubmit={saveUser} className="stack"><input required={!editingUserId} disabled={!!editingUserId} placeholder="Email" value={userForm.email} onChange={e=>setUserForm({...userForm,email:e.target.value})}/><input required={!editingUserId} type="password" placeholder={editingUserId?'Новый пароль (необязательно)':'Пароль'} value={userForm.password} onChange={e=>setUserForm({...userForm,password:e.target.value})}/><input required placeholder="Имя" value={userForm.firstName} onChange={e=>setUserForm({...userForm,firstName:e.target.value})}/><input required placeholder="Фамилия" value={userForm.lastName} onChange={e=>setUserForm({...userForm,lastName:e.target.value})}/><select value={userForm.role} onChange={e=>setUserForm({...userForm,role:e.target.value})}><option value="OPERATOR">Оператор</option><option value="VIEWER">Просмотр</option>{currentUser?.role==='SUPER_ADMIN'&&<option value="ORG_ADMIN">Администратор</option>}</select>{editingUserId&&<label><input type="checkbox" checked={userForm.isActive} onChange={e=>setUserForm({...userForm,isActive:e.target.checked})}/> Активен</label>}<button className="primary">{editingUserId?'Сохранить изменения':'Добавить пользователя'}</button>{editingUserId&&<button type="button" onClick={()=>{setEditingUserId(null);setUserForm({email:'',password:'',firstName:'',lastName:'',role:'OPERATOR',isActive:true})}}>Отмена</button>}</form>{users.map((u:any)=><div className="record" key={u.id}><div><b>{u.first_name} {u.last_name}</b><span>{u.email} · {u.role} · {u.is_active?'активен':'отключён'}</span></div>{u.id!==currentUser?.id&&<button type="button" onClick={()=>{setEditingUserId(u.id);setUserForm({email:u.email,password:'',firstName:u.first_name||'',lastName:u.last_name||'',role:u.role,isActive:Boolean(u.is_active)})}}>Изменить</button>}</div>)}</div> : null}</div>
-    if(active==='Контроль сроков')return <><h1>Контроль сроков</h1><p className="muted">Сроки регистрации, виз, документов и страхования.</p><div className="panel"><table><thead><tr><th>ФИО</th><th>Тип</th><th>Запись</th><th>Срок</th><th>Статус</th></tr></thead><tbody>{(data.data||[]).map((x:any)=><tr key={x.item_type+x.item_name+x.end_date}><td>{x.last_name} {x.first_name}</td><td>{x.item_type}</td><td>{x.item_name}</td><td>{x.end_date}</td><td><span className={x.deadline_status==='EXPIRED'?'bad':x.deadline_status==='WARNING'?'warn':'ok'}>{x.deadline_status==='EXPIRED'?'ПРОСРОЧЕНО':x.deadline_status==='WARNING'?'СКОРО':'В НОРМЕ'}</span></td></tr>)}</tbody></table></div><div className="page-title-row"><span className="muted">Всего: {data.total||0}</span><div><button type="button" disabled={sectionPage<=1} onClick={()=>setSectionPage(p=>Math.max(1,p-1))}>← Назад</button> <span>Страница {sectionPage} из {Math.max(1,Math.ceil(Number(data.total||0)/sectionPageSize))}</span> <button type="button" disabled={sectionPage*sectionPageSize>=Number(data.total||0)} onClick={()=>setSectionPage(p=>p+1)}>Вперёд →</button></div></div></>
-    if(active==='Документы')return <><h1>Документы</h1><p className="muted">Хранилище и управление документами.</p>{error&&<div className="error">{error}</div>}<div className="grid2"><div className="panel pad"><h2>{topEditingDocId?'Редактировать документ':'Добавить документ'}</h2>{canWrite&&<form onSubmit={saveTopDocument} className="stack">{!topEditingDocId&&<label>Иностранец<select required value={topDocForeignerId} onChange={e=>setTopDocForeignerId(e.target.value)}><option value="">Выберите иностранца</option>{foreigners.filter((x:any)=>x.status!=='ARCHIVED').map((x:any)=><option key={x.id} value={x.id}>{x.last_name} {x.first_name} · {x.citizenship}</option>)}</select></label>}<input placeholder="Тип документа" value={topDoc.documentType} onChange={e=>setTopDoc({...topDoc,documentType:e.target.value})}/><input placeholder="Номер" required value={topDoc.documentNumber} onChange={e=>setTopDoc({...topDoc,documentNumber:e.target.value})}/><input placeholder="Страна выдачи" value={topDoc.issuingCountry} onChange={e=>setTopDoc({...topDoc,issuingCountry:e.target.value})}/><label>Дата выдачи<input type="date" value={topDoc.issueDate} onChange={e=>setTopDoc({...topDoc,issueDate:e.target.value})}/></label><label>Дата окончания *<input type="date" required value={topDoc.expiryDate} onChange={e=>setTopDoc({...topDoc,expiryDate:e.target.value})}/></label><button className="primary" disabled={topDocSaving}>{topDocSaving?'Сохранение...':topEditingDocId?'Сохранить изменения':'Добавить документ'}</button>{topEditingDocId&&<button type="button" onClick={()=>{setTopEditingDocId(null);setTopDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''})}}>Отмена</button>}</form>}</div><div className="panel pad"><h2>Список документов</h2>{(data.documents||[]).length?(data.documents||[]).map((d:any)=><div className="record" key={d.id}><div><b>{d.last_name} {d.first_name}</b><span>{d.document_type} №{d.document_number} · {d.issuing_country||'страна не указана'} · до {d.expiry_date||'—'}</span></div><span>{canWrite&&<button type="button" onClick={()=>editTopDocument(d)}>Редактировать</button>} {canDelete&&<button type="button" onClick={()=>deleteTopDocument(d.id)}>Удалить</button>}<button type="button" onClick={()=>{setDetailTab('Документы');openForeigner({id:d.foreigner_id})}}>Открыть карточку</button></span></div>):<p className="muted">Документов пока нет.</p>}<div className="page-title-row"><span className="muted">Всего документов: {data.documentsTotal||0}</span><div><button type="button" disabled={sectionPage<=1} onClick={()=>setSectionPage(p=>Math.max(1,p-1))}>← Назад</button> <span>Страница {sectionPage}</span> <button type="button" disabled={sectionPage*sectionPageSize>=Number(data.documentsTotal||0)} onClick={()=>setSectionPage(p=>p+1)}>Вперёд →</button></div></div></div></div><div className="panel pad"><h2>Визы / разрешения</h2>{(data.visas||[]).length?(data.visas||[]).map((v:any)=><div className="record" key={v.id}><div><b>{v.last_name} {v.first_name}</b><span>{v.visa_type}{v.visa_number?' №'+v.visa_number:''} · до {v.end_date||'—'}</span></div><button type="button" onClick={()=>{openForeigner({id:v.foreigner_id});setDetailTab('Виза / Разрешение')}}>Открыть карточку</button></div>):<p className="muted">Виз и разрешений пока нет.</p>}</div><div className="page-title-row"><span className="muted">Документы: {data.documentsTotal||0} · Визы: {data.visasTotal||0}</span><div><button type="button" disabled={sectionPage<=1} onClick={()=>setSectionPage(p=>Math.max(1,p-1))}>← Назад</button> <span>Страница {sectionPage} из {Math.max(1,Math.ceil(Math.max(Number(data.documentsTotal||0),Number(data.visasTotal||0))/sectionPageSize))}</span> <button type="button" disabled={sectionPage*sectionPageSize>=Math.max(Number(data.documentsTotal||0),Number(data.visasTotal||0))} onClick={()=>setSectionPage(p=>p+1)}>Вперёд →</button></div></div></>
-    if(active==='История')return <><h1>История действий</h1><p className="muted">Журнал операций пользователей.</p><div className="panel">{(data.data||[]).map((x:any)=><div className="history" key={x.id}><b>{x.action} · {x.entity_type}</b><span>{new Date(x.created_at).toLocaleString()} · {x.first_name||'система'}</span></div>)}</div><div className="page-title-row"><span className="muted">Всего: {data.total||0}</span><div><button type="button" disabled={sectionPage<=1} onClick={()=>setSectionPage(p=>Math.max(1,p-1))}>← Назад</button> <span>Страница {sectionPage}</span> <button type="button" disabled={sectionPage*sectionPageSize>=Number(data.total||0)} onClick={()=>setSectionPage(p=>p+1)}>Вперёд →</button></div></div></>
-    if(applicationLogs&&applicationLogsId)return <div className="panel pad"><h2>Журнал обмена</h2><button type="button" onClick={()=>{setApplicationLogs(null);setApplicationLogsId(null)}}>Закрыть</button><h3>Статусы</h3>{(applicationLogs.history||[]).map((h:any)=><div className="history" key={h.id}><b>{h.status}</b><span>{new Date(h.created_at).toLocaleString()} · {h.message||'—'}</span></div>)}<h3>Обмен</h3>{(applicationLogs.logs||[]).map((l:any)=><div className="history" key={l.id}><b>{l.direction}{l.http_status?' · HTTP '+l.http_status:''}</b><span>{new Date(l.created_at).toLocaleString()} · {l.error||'без ошибки'}</span></div>)}</div>
-    if(active==='Е-паслуга')return <><h1>Е-паслуга</h1><p className="muted">Подготовка заявки на официальную государственную услугу.</p>{error&&<div className="error">{error}</div>}<div className="panel pad"><h2>Создать заявку</h2><div className="form-grid"><label>Иностранец<select value={applicationForeignerId} onChange={e=>setApplicationForeignerId(e.target.value)}><option value="">Выберите иностранца</option>{foreigners.filter((x:any)=>x.status!=='ARCHIVED').map((x:any)=><option key={x.id} value={x.id}>{x.last_name} {x.first_name} · {x.citizenship}</option>)}</select></label><label>Услуга<input value={serviceType} onChange={e=>setServiceType(e.target.value)} placeholder="Например: Регистрация иностранного гражданина"/></label></div>{canWrite&&<button className="primary" disabled={!applicationForeignerId||creatingApplication} onClick={()=>createApplication(applicationForeignerId)}>Создать заявку</button>}<p className="muted">Заявка получает статус подготовки к официальной отправке. Фактическая отправка выполняется через официальный государственный канал.</p></div><div className="panel"><h2 className="pad">Заявки</h2>{(data.data||[]).length?(data.data||[]).map((x:any)=><div className="history" key={x.id}><div><b>{x.service_type}</b><span>{x.last_name||''} {x.first_name||''} · {x.status}{x.external_reference?' · № '+x.external_reference:''}</span>{x.last_status_message&&<span className="muted">{x.last_status_message}</span>}</div><span>{canWrite&&<button type="button" onClick={()=>prepareApplication(x.id)}>Сформировать запрос</button>}<button type="button" onClick={()=>loadApplicationLogs(x.id)}>Журнал</button></span></div>):<div className="pad">Заявок пока нет.</div>}</div></>
-    <div className="page-title-row"><span className="muted">Всего заявок: {data.total||0}</span><div><button type="button" disabled={sectionPage<=1} onClick={()=>setSectionPage(p=>Math.max(1,p-1))}>← Назад</button> <span>Страница {sectionPage}</span> <button type="button" disabled={sectionPage*sectionPageSize>=Number(data.total||0)} onClick={()=>setSectionPage(p=>p+1)}>Вперёд →</button></div></div></>
-    if(active==='Отчёты')return <><h1>Отчёты</h1><p className="muted">Сводка по организации</p><div className="cards">{stats(Number(data?.foreigners)||0,'Иностранцев')}{stats(Number(data?.documents)||0,'Документов')}{stats(Number(data?.visas)||0,'Активных виз')}{stats(Number(data?.registrations)||0,'Регистраций')}</div><div className="panel pad"><h2>Экспорт</h2><p className="muted">Отчет по документам, визам и регистрациям с контрольными сроками.</p><button type="button" onClick={exportExcel}>Экспорт Excel</button> <button type="button" onClick={exportPdf}>Экспорт PDF</button></div></>
+    if(active==='Главная') return Dashboard()
+    if(active==='Иностранцы') return Foreigners()
+
+    if(active==='Настройки'){
+      return <div className="stack">
+        <div className="panel pad">
+          <h1>Настройки</h1>
+          <h3>Профиль</h3>
+          <p><b>Пользователь:</b> {currentUser?.first_name||''} {currentUser?.last_name||''}</p>
+          <p><b>Email:</b> {currentUser?.email||'—'}</p>
+          <p><b>Роль:</b> {currentUser?.role||'—'}</p>
+        </div>
+        {['SUPER_ADMIN','ORG_ADMIN'].includes(currentUser?.role) && <div className="panel pad">
+          <h2>Пользователи</h2>
+          <form onSubmit={saveUser} className="stack">
+            <input required={!editingUserId} disabled={!!editingUserId} placeholder="Email" value={userForm.email} onChange={e=>setUserForm({...userForm,email:e.target.value})}/>
+            <input required={!editingUserId} type="password" placeholder={editingUserId?'Новый пароль (необязательно)':'Пароль'} value={userForm.password} onChange={e=>setUserForm({...userForm,password:e.target.value})}/>
+            <input required placeholder="Имя" value={userForm.firstName} onChange={e=>setUserForm({...userForm,firstName:e.target.value})}/>
+            <input required placeholder="Фамилия" value={userForm.lastName} onChange={e=>setUserForm({...userForm,lastName:e.target.value})}/>
+            <select value={userForm.role} onChange={e=>setUserForm({...userForm,role:e.target.value})}>
+              <option value="OPERATOR">Оператор</option>
+              <option value="VIEWER">Просмотр</option>
+              {currentUser?.role==='SUPER_ADMIN' && <option value="ORG_ADMIN">Администратор</option>}
+            </select>
+            {editingUserId && <label><input type="checkbox" checked={userForm.isActive} onChange={e=>setUserForm({...userForm,isActive:e.target.checked})}/> Активен</label>}
+            <button className="primary">{editingUserId?'Сохранить изменения':'Добавить пользователя'}</button>
+            {editingUserId && <button type="button" onClick={()=>{setEditingUserId(null);setUserForm({email:'',password:'',firstName:'',lastName:'',role:'OPERATOR',isActive:true})}}>Отмена</button>}
+          </form>
+          {users.map((u:any)=><div className="record" key={u.id}>
+            <div><b>{u.first_name} {u.last_name}</b><span>{u.email} · {u.role} · {u.is_active?'активен':'отключён'}</span></div>
+            {u.id!==currentUser?.id && <button type="button" onClick={()=>{setEditingUserId(u.id);setUserForm({email:u.email,password:'',firstName:u.first_name||'',lastName:u.last_name||'',role:u.role,isActive:Boolean(u.is_active)})}}>Изменить</button>}
+          </div>)}
+        </div>}
+      </div>
+    }
+
+    if(active==='Контроль сроков'){
+      return <div>
+        <h1>Контроль сроков</h1>
+        <p className="muted">Сроки регистрации, виз, документов и страхования.</p>
+        <div className="panel"><table><thead><tr><th>ФИО</th><th>Тип</th><th>Запись</th><th>Срок</th><th>Статус</th></tr></thead>
+          <tbody>{(data.data||[]).map((x:any)=><tr key={x.item_type+x.item_name+x.end_date}>
+            <td>{x.last_name} {x.first_name}</td><td>{x.item_type}</td><td>{x.item_name}</td><td>{x.end_date}</td>
+            <td><span className={x.deadline_status==='EXPIRED'?'bad':x.deadline_status==='WARNING'?'warn':'ok'}>{x.deadline_status==='EXPIRED'?'ПРОСРОЧЕНО':x.deadline_status==='WARNING'?'СКОРО':'В НОРМЕ'}</span></td>
+          </tr>)}</tbody>
+        </table></div>
+        <div className="page-title-row"><span className="muted">Всего: {data.total||0}</span><div>
+          <button type="button" disabled={sectionPage<=1} onClick={()=>setSectionPage(p=>Math.max(1,p-1))}>← Назад</button>
+          <span>Страница {sectionPage} из {Math.max(1,Math.ceil(Number(data.total||0)/sectionPageSize))}</span>
+          <button type="button" disabled={sectionPage*sectionPageSize>=Number(data.total||0)} onClick={()=>setSectionPage(p=>p+1)}>Вперёд →</button>
+        </div></div>
+      </div>
+    }
+
+    if(active==='Документы'){
+      return <div>
+        <h1>Документы</h1><p className="muted">Хранилище и управление документами.</p>{error&&<div className="error">{error}</div>}
+        <div className="grid2">
+          <div className="panel pad"><h2>{topEditingDocId?'Редактировать документ':'Добавить документ'}</h2>
+            {canWrite && <form onSubmit={saveTopDocument} className="stack">
+              {!topEditingDocId && <label>Иностранец<select required value={topDocForeignerId} onChange={e=>setTopDocForeignerId(e.target.value)}><option value="">Выберите иностранца</option>{foreigners.filter((x:any)=>x.status!=='ARCHIVED').map((x:any)=><option key={x.id} value={x.id}>{x.last_name} {x.first_name} · {x.citizenship}</option>)}</select></label>}
+              <input placeholder="Тип документа" value={topDoc.documentType} onChange={e=>setTopDoc({...topDoc,documentType:e.target.value})}/>
+              <input placeholder="Номер" required value={topDoc.documentNumber} onChange={e=>setTopDoc({...topDoc,documentNumber:e.target.value})}/>
+              <input placeholder="Страна выдачи" value={topDoc.issuingCountry} onChange={e=>setTopDoc({...topDoc,issuingCountry:e.target.value})}/>
+              <label>Дата выдачи<input type="date" value={topDoc.issueDate} onChange={e=>setTopDoc({...topDoc,issueDate:e.target.value})}/></label>
+              <label>Дата окончания *<input type="date" required value={topDoc.expiryDate} onChange={e=>setTopDoc({...topDoc,expiryDate:e.target.value})}/></label>
+              <button className="primary" disabled={topDocSaving}>{topDocSaving?'Сохранение...':topEditingDocId?'Сохранить изменения':'Добавить документ'}</button>
+              {topEditingDocId && <button type="button" onClick={()=>{setTopEditingDocId(null);setTopDoc({documentType:'Паспорт',documentNumber:'',issuingCountry:'',issueDate:'',expiryDate:''})}}>Отмена</button>}
+            </form>}
+          </div>
+          <div className="panel pad"><h2>Список документов</h2>
+            {(data.documents||[]).length ? (data.documents||[]).map((d:any)=><div className="record" key={d.id}>
+              <div><b>{d.last_name} {d.first_name}</b><span>{d.document_type} №{d.document_number} · {d.issuing_country||'страна не указана'} · до {d.expiry_date||'—'}</span></div>
+              <span>{canWrite&&<button type="button" onClick={()=>editTopDocument(d)}>Редактировать</button>} {canDelete&&<button type="button" onClick={()=>deleteTopDocument(d.id)}>Удалить</button>}<button type="button" onClick={()=>{setDetailTab('Документы');openForeigner({id:d.foreigner_id})}}>Открыть карточку</button></span>
+            </div>) : <p className="muted">Документов пока нет.</p>}
+          </div>
+        </div>
+        <div className="panel pad"><h2>Визы / разрешения</h2>
+          {(data.visas||[]).length ? (data.visas||[]).map((v:any)=><div className="record" key={v.id}>
+            <div><b>{v.last_name} {v.first_name}</b><span>{v.visa_type}{v.visa_number?' №'+v.visa_number:''} · до {v.end_date||'—'}</span></div>
+            <button type="button" onClick={()=>{openForeigner({id:v.foreigner_id});setDetailTab('Виза / Разрешение')}}>Открыть карточку</button>
+          </div>) : <p className="muted">Виз и разрешений пока нет.</p>}
+        </div>
+      </div>
+    }
+
+    if(active==='История'){
+      return <div>
+        <h1>История действий</h1><p className="muted">Журнал операций пользователей.</p>
+        <div className="panel">{(data.data||[]).map((x:any)=><div className="history" key={x.id}><b>{x.action} · {x.entity_type}</b><span>{new Date(x.created_at).toLocaleString()} · {x.first_name||'система'}</span></div>)}</div>
+        <div className="page-title-row"><span className="muted">Всего: {data.total||0}</span><div>
+          <button type="button" disabled={sectionPage<=1} onClick={()=>setSectionPage(p=>Math.max(1,p-1))}>← Назад</button><span>Страница {sectionPage}</span>
+          <button type="button" disabled={sectionPage*sectionPageSize>=Number(data.total||0)} onClick={()=>setSectionPage(p=>p+1)}>Вперёд →</button>
+        </div></div>
+      </div>
+    }
+
+    if(applicationLogs&&applicationLogsId){
+      return <div className="panel pad"><h2>Журнал обмена</h2><button type="button" onClick={()=>{setApplicationLogs(null);setApplicationLogsId(null)}}>Закрыть</button>
+        <h3>Статусы</h3>{(applicationLogs.history||[]).map((h:any)=><div className="history" key={h.id}><b>{h.status}</b><span>{new Date(h.created_at).toLocaleString()} · {h.message||'—'}</span></div>)}
+        <h3>Обмен</h3>{(applicationLogs.logs||[]).map((l:any)=><div className="history" key={l.id}><b>{l.direction}{l.http_status?' · HTTP '+l.http_status:''}</b><span>{new Date(l.created_at).toLocaleString()} · {l.error||'без ошибки'}</span></div>)}
+      </div>
+    }
+
+    if(active==='Е-паслуга'){
+      return <div>
+        <h1>Е-паслуга</h1><p className="muted">Подготовка заявки на официальную государственную услугу.</p>{error&&<div className="error">{error}</div>}
+        <div className="panel pad"><h2>Создать заявку</h2><div className="form-grid">
+          <label>Иностранец<select value={applicationForeignerId} onChange={e=>setApplicationForeignerId(e.target.value)}><option value="">Выберите иностранца</option>{foreigners.filter((x:any)=>x.status!=='ARCHIVED').map((x:any)=><option key={x.id} value={x.id}>{x.last_name} {x.first_name} · {x.citizenship}</option>)}</select></label>
+          <label>Услуга<input value={serviceType} onChange={e=>setServiceType(e.target.value)} placeholder="Например: Регистрация иностранного гражданина"/></label>
+        </div>
+        {canWrite&&<button className="primary" disabled={!applicationForeignerId||creatingApplication} onClick={()=>createApplication(applicationForeignerId)}>Создать заявку</button>}
+        </div>
+        <div className="panel"><h2 className="pad">Заявки</h2>{(data.data||[]).length ? (data.data||[]).map((x:any)=><div className="history" key={x.id}>
+          <div><b>{x.service_type}</b><span>{x.last_name||''} {x.first_name||''} · {x.status}{x.external_reference?' · № '+x.external_reference:''}</span>{x.last_status_message&&<span className="muted">{x.last_status_message}</span>}</div>
+          <span>{canWrite&&<button type="button" onClick={()=>prepareApplication(x.id)}>Сформировать запрос</button>}<button type="button" onClick={()=>loadApplicationLogs(x.id)}>Журнал</button></span>
+        </div>) : <div className="pad">Заявок пока нет.</div>}</div>
+      </div>
+    }
+
+    if(active==='Отчёты'){
+      return <div><h1>Отчёты</h1><p className="muted">Сводка по организации</p>
+        <div className="cards">{stats(Number(data?.foreigners)||0,'Иностранцев')}{stats(Number(data?.documents)||0,'Документов')}{stats(Number(data?.visas)||0,'Активных виз')}{stats(Number(data?.registrations)||0,'Регистраций')}</div>
+        <div className="panel pad"><h2>Экспорт</h2><p className="muted">Отчет по документам, визам и регистрациям с контрольными сроками.</p><button type="button" onClick={exportExcel}>Экспорт Excel</button> <button type="button" onClick={exportPdf}>Экспорт PDF</button></div>
+      </div>
+    }
     return null
   }
 
