@@ -411,6 +411,7 @@ function App(){
     w.document.close();w.focus();setTimeout(()=>w.print(),200)
   }
   function Section(){
+    // Verified JSX boundaries — trigger fresh Railway source fetch
     if(active==='Главная') return Dashboard()
     if(active==='Иностранцы') return Foreigners()
 
