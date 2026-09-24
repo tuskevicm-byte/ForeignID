@@ -1,5 +1,5 @@
 [build]
-  command = "cd apps/frontend && npm ci && npm run build"
+  command = "cd apps/frontend && npm install --no-audit --no-fund && npm run build"
   publish = "apps/frontend/dist"
 
 [[redirects]]
@@ -12,3 +12,4 @@
   from = "/*"
   to = "/index.html"
   status = 200
+  force = true
