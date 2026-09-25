@@ -38,9 +38,16 @@ async function storeProtectedPhoto(organizationId:string,fileUrl:string){
   })
 }
 
+function normalizeDate(value:any){
+  if(value==null||value==='')return value
+  if(value instanceof Date)return value.toISOString().slice(0,10)
+  const s=String(value)
+  const match=/^(\d{4}-\d{2}-\d{2})/.exec(s)
+  return match?match[1]:value
+}
 function isValidDate(value:any){
   if(value==null||value==='')return true
-  const s=String(value)
+  const s=String(normalizeDate(value))
   if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return false
   const [y,m,d]=s.split('-').map(Number)
   const dt=new Date(Date.UTC(y,m-1,d))
@@ -268,7 +275,7 @@ app.patch('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN
   if(!current.rowCount)return res.status(404).json({message:'Регистрация не найдена'})
   const old=current.rows[0], body=req.body||{}
   const registrationType=body.registrationType??old.registration_type, registrationNumber=body.registrationNumber??old.registration_number
-  const startDate=body.startDate??old.start_date, endDate=body.endDate??old.end_date, status=body.status??old.status, governmentReference=body.governmentReference??old.government_reference
+  const startDate=normalizeDate(body.startDate??old.start_date), endDate=normalizeDate(body.endDate??old.end_date), status=body.status??old.status, governmentReference=body.governmentReference??old.government_reference
   if(hasInvalidDate(startDate,endDate))return res.status(400).json({message:'Некорректная дата регистрации. Используйте ГГГГ-ММ-ДД'})
   if(invalidDateRange(startDate,endDate))return res.status(400).json({message:'Дата начала регистрации не может быть позже даты окончания'})
   if(!endDate)return res.status(400).json({message:'Дата окончания регистрации обязательна'})
@@ -285,7 +292,7 @@ app.patch('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','O
   if(!current.rowCount)return res.status(404).json({message:'Документ не найден'})
   const old=current.rows[0], body=req.body||{}
   const documentType=body.documentType??old.document_type, documentNumber=body.documentNumber??old.document_number, issuingCountry=body.issuingCountry??old.issuing_country
-  const issueDate=body.issueDate??old.issue_date, expiryDate=body.expiryDate??old.expiry_date
+  const issueDate=normalizeDate(body.issueDate??old.issue_date), expiryDate=normalizeDate(body.expiryDate??old.expiry_date)
   if(hasInvalidDate(issueDate,expiryDate))return res.status(400).json({message:'Некорректная дата документа. Используйте ГГГГ-ММ-ДД'})
   if(invalidDateRange(issueDate,expiryDate))return res.status(400).json({message:'Дата выдачи документа не может быть позже даты окончания'})
   if(!documentType||!documentNumber||!expiryDate)return res.status(400).json({message:'Тип, номер и срок действия документа обязательны'})
