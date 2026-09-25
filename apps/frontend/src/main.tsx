@@ -97,8 +97,7 @@ function App(){
   async function saveTopDocument(e:any){
     e.preventDefault();setTopDocSaving(true);setError('')
     try{
-      if(!topDoc.documentType||!topDoc.documentNumber||!topDoc.expiryDate)throw new Error('Для документа укажите тип, номер и срок действия.')
-      if(topDoc.issueDate&&topDoc.issueDate>topDoc.expiryDate)throw new Error('Дата выдачи документа не может быть позже даты окончания.')
+      if(!topDoc.documentType||!topDoc.documentNumber||!topDoc.expiryDate)throw new Error('Для документа укажите тип, номер и срок действия.')      if(topDoc.issueDate&&topDoc.issueDate>topDoc.expiryDate)throw new Error('Дата выдачи документа не может быть позже даты окончания.')
       if(!topDocForeignerId&&!topEditingDocId)throw new Error('Выберите иностранца.')
       const path=topEditingDocId?'/documents/'+topEditingDocId:'/documents'
       const method=topEditingDocId?'PATCH':'POST'
@@ -191,14 +190,16 @@ function App(){
   }
 
   function startEdit(){if(!selected)return;setDetailTab('Основная информация');const f=selected.foreigner;const d=selected.documents?.[0];const v=selected.visas?.[0];const r=selected.registrations?.[0];setForm({...blank,...f,firstName:f.first_name,middleName:f.middle_name||'',lastName:f.last_name,citizenship:f.citizenship,birthDate:f.birth_date||'',gender:f.gender||'',phone:f.phone||'',email:f.email||'',entryDate:f.entry_date||'',stayBasis:f.stay_basis||'',stayAddress:f.stay_address||'',insuranceCompany:f.insurance_company||'',insurancePolicyNumber:f.insurance_policy_number||'',insuranceEndDate:f.insurance_end_date||'',photoUrl:f.photo_url||''});if(d){setDoc({documentType:d.document_type||'Паспорт',documentNumber:d.document_number||'',issuingCountry:d.issuing_country||'',issueDate:d.issue_date||'',expiryDate:d.expiry_date||''});setEditingDocId(d.id)}else setEditingDocId(null);if(v){setVisa({visaType:v.visa_type||'',visaNumber:v.visa_number||'',issueDate:v.issue_date||'',startDate:v.start_date||'',endDate:v.end_date||'',notes:v.notes||''});setEditingVisaId(v.id)}else {setVisa({visaType:'Рабочая',visaNumber:'',issueDate:'',startDate:'',endDate:'',notes:''});setEditingVisaId(null)}if(r){setRegistration({registrationType:r.registration_type||'TEMPORARY_STAY',registrationNumber:r.registration_number||'',startDate:r.start_date||'',endDate:r.end_date||'',governmentReference:r.government_reference||''});setEditingRegistrationId(r.id)}else setEditingRegistrationId(null);setStep(1);setEditing(true);setWizard(true);setError('')}
+  async function uploadPhoto(foreignerId:string,fileUrl:string){
+    await api('/photos',{method:'POST',body:JSON.stringify({foreignerId,fileUrl})})
+  }
   async function saveForeigner(e:any){
     e.preventDefault();setSaving(true);setError('')
     try{
       const payload={...form}
       const documentStarted=Boolean(doc.documentNumber||doc.issuingCountry||doc.issueDate||doc.expiryDate)
       const visaStarted=Boolean(visa.visaNumber||visa.issueDate||visa.startDate||visa.endDate||visa.notes)
-      const registrationStarted=Boolean(registration.registrationNumber||registration.startDate||registration.endDate||registration.governmentReference)
-      if(documentStarted&&!doc.documentNumber)throw new Error('Заполните номер документа.')
+      const registrationStarted=Boolean(registration.registrationNumber||registration.startDate||registration.endDate||registration.governmentReference)      if(documentStarted&&!doc.documentNumber)throw new Error('Заполните номер документа.')
       if(documentStarted&&!doc.expiryDate)throw new Error('Укажите срок действия документа.')
       if(visaStarted&&(!visa.visaType||!visa.endDate))throw new Error('Для визы укажите тип и дату окончания.')
       if(registrationStarted&&!registration.endDate)throw new Error('Для регистрации укажите дату окончания.')
@@ -297,7 +298,6 @@ function App(){
   }
 
   if(!token)return <div className="login"><form onSubmit={login}><h1>ForeignID</h1><p>Система учета иностранных граждан</p><input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email"/><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Пароль"/>{error&&<div className="error">{error}</div>}<button className="primary">Войти</button><small>Демо: admin@example.local / ChangeMe-123!</small></form></div>
-
   const nav=['Главная','Иностранцы','Контроль сроков','Е-паслуга','Документы','Отчёты','История','Настройки']
   const canWrite=['SUPER_ADMIN','ORG_ADMIN','OPERATOR'].includes(currentUser?.role)
   const canDelete=['SUPER_ADMIN','ORG_ADMIN'].includes(currentUser?.role)
@@ -397,8 +397,7 @@ function App(){
   }
 
   function exportExcel(){
-    const rows=data.deadlines||[]
-    const esc=(v:any)=>{const s=String(v??'');return '"'+s.replace(/"/g,'""')+'"'}
+    const rows=data.deadlines||[]    const esc=(v:any)=>{const s=String(v??'');return '"'+s.replace(/"/g,'""')+'"'}
     const csv='ФИО,Тип,Запись,Срок,Статус\\n'+rows.map((x:any)=>[x.last_name+' '+x.first_name,x.item_type,x.item_name,x.end_date,x.deadline_status].map(esc).join(',')).join('\\n')
     const blob=new Blob(['\\ufeff',csv],{type:'text/csv;charset=utf-8'})
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='foreignid-report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
@@ -498,7 +497,6 @@ function App(){
         </div>
       </div>
     }
-
     if(active==='История'){
       return <div>
         <h1>История действий</h1><p className="muted">Журнал операций пользователей.</p>
