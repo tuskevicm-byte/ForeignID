@@ -52,7 +52,16 @@ function invalidDateRange(startDate:any,endDate:any){
 function hasInvalidDate(...values:any[]){
   return values.some(value=>!isValidDate(value))
 }
-app.use(cors())
+const allowedOrigins=(process.env.CORS_ORIGIN||'https://frontend-production-d68e.up.railway.app,http://localhost:3000,http://localhost:5173,http://localhost:4200').split(',').map(x=>x.trim()).filter(Boolean)
+app.use(cors({
+  origin:(origin,callback)=>{
+    if(!origin||allowedOrigins.includes(origin))return callback(null,true)
+    return callback(new Error('CORS not allowed'))
+  },
+  credentials:true,
+  methods:['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
+  allowedHeaders:['Content-Type','Authorization']
+}))
 app.use(express.json({limit:'2mb'}))
 
 async function audit(req:AuthRequest, action:string, entityType:string, entityId:any, details:any={}) {
