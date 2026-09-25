@@ -121,7 +121,7 @@ function App(){
 
   function parseCsv(text:string){
     const rows:string[][]=[]; let row:string[]=[],cell='',quoted=false
-    for(let i=0;i<text.length;i++){const ch=text[i],next=text[i+1];if(ch==='"'){if(quoted&&next==='"'){cell+='"';i++}else quoted=!quoted}else if(ch===','&&!quoted){row.push(cell);cell=''}else if((ch==='\\n'||ch==='\\r')&&!quoted){if(ch==='\\r'&&next==='\\n')i++;row.push(cell);if(row.some(v=>v.trim()))rows.push(row);row=[];cell=''}else cell+=ch}row.push(cell);if(row.some(v=>v.trim()))rows.push(row);return rows}
+    for(let i=0;i<text.length;i++){const ch=text[i],next=text[i+1];if(ch==='"'){if(quoted&&next==='"'){cell+='"';i++}else quoted=!quoted}else if(ch===','&&!quoted){row.push(cell);cell=''}else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&next==='\n')i++;row.push(cell);if(row.some(v=>v.trim()))rows.push(row);row=[];cell=''}else cell+=ch}row.push(cell);if(row.some(v=>v.trim()))rows.push(row);return rows}
   async function importCsv(e:any){const file=e.target.files?.[0];if(!file)return;try{const text=await file.text();const rows=parseCsv(text);if(rows.length<2)throw new Error('CSV пустой');const headers=rows[0].map(x=>x.trim());const map:any={firstName:'firstName',middleName:'middleName',lastName:'lastName',citizenship:'citizenship',birthDate:'birthDate',gender:'gender',phone:'phone',email:'email',entryDate:'entryDate',stayBasis:'stayBasis',stayAddress:'stayAddress',insuranceCompany:'insuranceCompany',insurancePolicyNumber:'insurancePolicyNumber',insuranceEndDate:'insuranceEndDate'};const data=rows.slice(1).map(r=>{const x:any={};headers.forEach((h,j)=>{if(map[h])x[map[h]]=r[j]?.trim()||''});return x});const result=await api('/foreigners/import',{method:'POST',body:JSON.stringify({rows:data})});await loadForeigners();setError(result.errors?.length?'Импортировано: '+result.imported+'. Ошибок: '+result.errors.length+'.':'Импортировано: '+result.imported+'.')}catch(err:any){setError(err.message)}e.target.value=''}
   async function loadNotifications(){try{const d=await api('/notifications');setNotifications(d.data||[])}catch{setNotifications([])}}
   async function loadUsers(){try{const d=await api('/users');setUsers(d.data||[])}catch(e:any){setError(e.message)}}
@@ -398,7 +398,7 @@ function App(){
 
   function exportExcel(){
     const rows=data.deadlines||[]    const esc=(v:any)=>{const s=String(v??'');return '"'+s.replace(/"/g,'""')+'"'}
-    const csv='ФИО,Тип,Запись,Срок,Статус\\n'+rows.map((x:any)=>[x.last_name+' '+x.first_name,x.item_type,x.item_name,x.end_date,x.deadline_status].map(esc).join(',')).join('\\n')
+    const csv='ФИО,Тип,Запись,Срок,Статус\n'+rows.map((x:any)=>[x.last_name+' '+x.first_name,x.item_type,x.item_name,x.end_date,x.deadline_status].map(esc).join(',')).join('\n')
     const blob=new Blob(['\\ufeff',csv],{type:'text/csv;charset=utf-8'})
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='foreignid-report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
   }
