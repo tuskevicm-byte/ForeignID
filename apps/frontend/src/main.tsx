@@ -545,3 +545,5 @@ function App(){
   return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null);setWizard(false)}}>{x}</button>)}<button className="logout" onClick={()=>{localStorage.removeItem('token');setToken(null);setSelected(null);setWizard(false)}}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, документу, телефону..." value={q} onChange={e=>setQ(e.target.value)}/><span>{currentUser?`${currentUser.first_name||''} ${currentUser.last_name||''} · ${currentUser.role}`:'Пользователь'}</span></header>{selected?Detail():Section()}{wizard&&Wizard()}</main></div>
 }
 createRoot(document.getElementById('root')!).render(<App/>)
+
+// Railway source sync: force deployment from latest verified GitHub commit.
