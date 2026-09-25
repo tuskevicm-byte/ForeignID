@@ -308,8 +308,9 @@ app.patch('/api/v1/visas/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERA
   const current=await query('SELECT v.* FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE v.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
   if(!current.rowCount)return res.status(404).json({message:'Виза не найдена'})
   const old=current.rows[0], body=req.body||{}
-  const visaType=body.visaType??old.visa_type, visaNumber=body.visaNumber??old.visa_number, issueDate=body.issueDate??old.issue_date
-  const startDate=body.startDate??old.start_date, endDate=body.endDate??old.end_date, status=body.status??old.status, notes=body.notes??old.notes
+  const visaType=body.visaType??old.visa_type, visaNumber=body.visaNumber??old.visa_number
+  const issueDate=normalizeDate(body.issueDate??old.issue_date), startDate=normalizeDate(body.startDate??old.start_date), endDate=normalizeDate(body.endDate??old.end_date)
+  const status=body.status??old.status, notes=body.notes??old.notes
   if(hasInvalidDate(issueDate,startDate,endDate))return res.status(400).json({message:'Некорректная дата визы. Используйте ГГГГ-ММ-ДД'})
   if(invalidDateRange(startDate,endDate)||invalidDateRange(issueDate,endDate))return res.status(400).json({message:'Даты визы указаны некорректно'})
   if(!visaType||!endDate)return res.status(400).json({message:'Тип визы и дата окончания обязательны'})
