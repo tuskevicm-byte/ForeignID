@@ -264,14 +264,15 @@ app.post('/api/v1/registrations',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OP
   await audit(req,'CREATE','REGISTRATION',r.rows[0].id,{registrationType,registrationNumber});res.status(201).json(r.rows[0])
 })
 app.patch('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
-  const {registrationType,registrationNumber,startDate,endDate,status,governmentReference}=req.body||{}
-  if(hasInvalidDate(startDate,endDate))return res.status(400).json({message:'Некорректная дата регистрации'})
+  const current=await query('SELECT r.* FROM registrations r JOIN foreigners f ON f.id=r.foreigner_id WHERE r.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
+  if(!current.rowCount)return res.status(404).json({message:'Регистрация не найдена'})
+  const old=current.rows[0], body=req.body||{}
+  const registrationType=body.registrationType??old.registration_type, registrationNumber=body.registrationNumber??old.registration_number
+  const startDate=body.startDate??old.start_date, endDate=body.endDate??old.end_date, status=body.status??old.status, governmentReference=body.governmentReference??old.government_reference
+  if(hasInvalidDate(startDate,endDate))return res.status(400).json({message:'Некорректная дата регистрации. Используйте ГГГГ-ММ-ДД'})
   if(invalidDateRange(startDate,endDate))return res.status(400).json({message:'Дата начала регистрации не может быть позже даты окончания'})
   if(!endDate)return res.status(400).json({message:'Дата окончания регистрации обязательна'})
-  const r=await query(`UPDATE registrations r SET registration_type=COALESCE($1,r.registration_type),registration_number=$2,start_date=$3,end_date=COALESCE($4,r.end_date),status=COALESCE($5,r.status),government_reference=$6
-    FROM foreigners f WHERE r.id=$7 AND r.foreigner_id=f.id AND f.organization_id=$8 RETURNING r.*`,
-    [registrationType,registrationNumber||null,startDate||null,endDate,status||null,governmentReference||null,req.params.id,req.user.organization_id])
-  if(!r.rowCount)return res.status(404).json({message:'Регистрация не найдена'})
+  const r=await query('UPDATE registrations SET registration_type=$1,registration_number=$2,start_date=$3,end_date=$4,status=$5,government_reference=$6 WHERE id=$7 RETURNING *',[registrationType,registrationNumber||null,startDate||null,endDate,status||null,governmentReference||null,req.params.id])
   await audit(req,'UPDATE','REGISTRATION',req.params.id,{registrationType,registrationNumber});res.json(r.rows[0])
 })
 app.delete('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
@@ -280,15 +281,15 @@ app.delete('/api/v1/registrations/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMI
   await audit(req,'DELETE','REGISTRATION',req.params.id);res.json({ok:true})
 })
 app.patch('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
-  const {documentType,documentNumber,issuingCountry,issueDate,expiryDate}=req.body||{}
-  if(hasInvalidDate(issueDate,expiryDate))return res.status(400).json({message:'Некорректная дата документа'})
+  const current=await query('SELECT d.* FROM identity_documents d JOIN foreigners f ON f.id=d.foreigner_id WHERE d.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
+  if(!current.rowCount)return res.status(404).json({message:'Документ не найден'})
+  const old=current.rows[0], body=req.body||{}
+  const documentType=body.documentType??old.document_type, documentNumber=body.documentNumber??old.document_number, issuingCountry=body.issuingCountry??old.issuing_country
+  const issueDate=body.issueDate??old.issue_date, expiryDate=body.expiryDate??old.expiry_date
+  if(hasInvalidDate(issueDate,expiryDate))return res.status(400).json({message:'Некорректная дата документа. Используйте ГГГГ-ММ-ДД'})
   if(invalidDateRange(issueDate,expiryDate))return res.status(400).json({message:'Дата выдачи документа не может быть позже даты окончания'})
   if(!documentType||!documentNumber||!expiryDate)return res.status(400).json({message:'Тип, номер и срок действия документа обязательны'})
-  const r=await query(`UPDATE identity_documents d SET document_type=COALESCE($1,d.document_type),document_number=COALESCE($2,d.document_number),
-    issuing_country=$3,issue_date=$4,expiry_date=COALESCE($5,d.expiry_date)
-    FROM foreigners f WHERE d.id=$6 AND d.foreigner_id=f.id AND f.organization_id=$7 RETURNING d.*`,
-    [documentType,documentNumber,issuingCountry||null,issueDate||null,expiryDate,req.params.id,req.user.organization_id])
-  if(!r.rowCount)return res.status(404).json({message:'Документ не найден'})
+  const r=await query('UPDATE identity_documents SET document_type=$1,document_number=$2,issuing_country=$3,issue_date=$4,expiry_date=$5 WHERE id=$6 RETURNING *',[documentType,documentNumber,issuingCountry||null,issueDate||null,expiryDate,req.params.id])
   await audit(req,'UPDATE','DOCUMENT',req.params.id,{documentType,documentNumber});res.json(r.rows[0])
 })
 app.delete('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
@@ -297,14 +298,15 @@ app.delete('/api/v1/documents/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),
   await audit(req,'DELETE','DOCUMENT',req.params.id);res.json({ok:true})
 })
 app.patch('/api/v1/visas/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
-  const {visaType,visaNumber,issueDate,startDate,endDate,status,notes}=req.body||{}
-  if(hasInvalidDate(issueDate,startDate,endDate))return res.status(400).json({message:'Некорректная дата визы'})
+  const current=await query('SELECT v.* FROM visas v JOIN foreigners f ON f.id=v.foreigner_id WHERE v.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
+  if(!current.rowCount)return res.status(404).json({message:'Виза не найдена'})
+  const old=current.rows[0], body=req.body||{}
+  const visaType=body.visaType??old.visa_type, visaNumber=body.visaNumber??old.visa_number, issueDate=body.issueDate??old.issue_date
+  const startDate=body.startDate??old.start_date, endDate=body.endDate??old.end_date, status=body.status??old.status, notes=body.notes??old.notes
+  if(hasInvalidDate(issueDate,startDate,endDate))return res.status(400).json({message:'Некорректная дата визы. Используйте ГГГГ-ММ-ДД'})
   if(invalidDateRange(startDate,endDate)||invalidDateRange(issueDate,endDate))return res.status(400).json({message:'Даты визы указаны некорректно'})
   if(!visaType||!endDate)return res.status(400).json({message:'Тип визы и дата окончания обязательны'})
-  const r=await query(`UPDATE visas v SET visa_type=COALESCE($1,v.visa_type),visa_number=$2,issue_date=$3,start_date=$4,end_date=COALESCE($5,v.end_date),status=COALESCE($6,v.status),notes=$7
-    FROM foreigners f WHERE v.id=$8 AND v.foreigner_id=f.id AND f.organization_id=$9 RETURNING v.*`,
-    [visaType,visaNumber||null,issueDate||null,startDate||null,endDate,status||null,notes||null,req.params.id,req.user.organization_id])
-  if(!r.rowCount)return res.status(404).json({message:'Виза не найдена'})
+  const r=await query('UPDATE visas SET visa_type=$1,visa_number=$2,issue_date=$3,start_date=$4,end_date=$5,status=$6,notes=$7 WHERE id=$8 RETURNING *',[visaType,visaNumber||null,issueDate||null,startDate||null,endDate,status||null,notes||null,req.params.id])
   await audit(req,'UPDATE','VISA',req.params.id,{visaType,visaNumber});res.json(r.rows[0])
 })
 app.delete('/api/v1/visas/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
