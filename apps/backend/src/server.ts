@@ -41,7 +41,7 @@ async function storeProtectedPhoto(organizationId:string,fileUrl:string){
 function isValidDate(value:any){
   if(value==null||value==='')return true
   const s=String(value)
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(s))return false
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return false
   const [y,m,d]=s.split('-').map(Number)
   const dt=new Date(Date.UTC(y,m-1,d))
   return dt.getUTCFullYear()===y&&dt.getUTCMonth()===m-1&&dt.getUTCDate()===d
