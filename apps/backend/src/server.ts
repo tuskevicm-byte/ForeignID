@@ -100,6 +100,7 @@ app.post('/api/v1/foreigners/import',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'
   for(let index=0;index<rows.length;index++){
     const x=rows[index]||{}
     if(!x.firstName||!x.lastName){errors.push({row:index+1,message:'Имя и фамилия обязательны'});continue}
+    if(hasInvalidDate(x.birthDate,x.entryDate,x.insuranceEndDate)){errors.push({row:index+1,message:'Некорректная дата: используйте ГГГГ-ММ-ДД'});continue}
     try{
       const r=await query(`INSERT INTO foreigners(
         organization_id,first_name,middle_name,last_name,citizenship,birth_date,gender,phone,email,
@@ -193,6 +194,7 @@ app.get('/api/v1/foreigners/:id',requireAuth,async(req:AuthRequest,res)=>{
 app.post('/api/v1/foreigners',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const {firstName,middleName,lastName,citizenship,birthDate,gender,phone,email,entryDate,stayBasis,stayAddress,insuranceCompany,insurancePolicyNumber,insuranceEndDate,photoUrl}=req.body||{}
   if(!firstName||!lastName||!citizenship)return res.status(400).json({message:'Имя, фамилия и гражданство обязательны'})
+  if(hasInvalidDate(birthDate,entryDate,insuranceEndDate))return res.status(400).json({message:'Некорректный формат даты. Используйте ГГГГ-ММ-ДД'})
   const r=await query(`INSERT INTO foreigners(organization_id,first_name,middle_name,last_name,citizenship,birth_date,gender,phone,email,entry_date,stay_basis,stay_address,insurance_company,insurance_policy_number,insurance_end_date,photo_url)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
     [req.user.organization_id,firstName,middleName||null,lastName,citizenship,birthDate||null,gender||null,phone||null,email||null,entryDate||null,stayBasis||null,stayAddress||null,insuranceCompany||null,insurancePolicyNumber||null,insuranceEndDate||null,photoUrl||null])
