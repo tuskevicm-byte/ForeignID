@@ -97,7 +97,8 @@ function App(){
   async function saveTopDocument(e:any){
     e.preventDefault();setTopDocSaving(true);setError('')
     try{
-      if(!topDoc.documentType||!topDoc.documentNumber||!topDoc.expiryDate)throw new Error('Для документа укажите тип, номер и срок действия.')      if(topDoc.issueDate&&topDoc.issueDate>topDoc.expiryDate)throw new Error('Дата выдачи документа не может быть позже даты окончания.')
+      if(!topDoc.documentType||!topDoc.documentNumber||!topDoc.expiryDate)throw new Error('Для документа укажите тип, номер и срок действия.');
+      if(topDoc.issueDate&&topDoc.issueDate>topDoc.expiryDate)throw new Error('Дата выдачи документа не может быть позже даты окончания.')
       if(!topDocForeignerId&&!topEditingDocId)throw new Error('Выберите иностранца.')
       const path=topEditingDocId?'/documents/'+topEditingDocId:'/documents'
       const method=topEditingDocId?'PATCH':'POST'
@@ -199,7 +200,8 @@ function App(){
       const payload={...form}
       const documentStarted=Boolean(doc.documentNumber||doc.issuingCountry||doc.issueDate||doc.expiryDate)
       const visaStarted=Boolean(visa.visaNumber||visa.issueDate||visa.startDate||visa.endDate||visa.notes)
-      const registrationStarted=Boolean(registration.registrationNumber||registration.startDate||registration.endDate||registration.governmentReference)      if(documentStarted&&!doc.documentNumber)throw new Error('Заполните номер документа.')
+      const registrationStarted=Boolean(registration.registrationNumber||registration.startDate||registration.endDate||registration.governmentReference);
+      if(documentStarted&&!doc.documentNumber)throw new Error('Заполните номер документа.')
       if(documentStarted&&!doc.expiryDate)throw new Error('Укажите срок действия документа.')
       if(visaStarted&&(!visa.visaType||!visa.endDate))throw new Error('Для визы укажите тип и дату окончания.')
       if(registrationStarted&&!registration.endDate)throw new Error('Для регистрации укажите дату окончания.')
