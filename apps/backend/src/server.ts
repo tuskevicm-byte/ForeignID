@@ -10,7 +10,7 @@ import {fileURLToPath} from 'node:url'
 
 const app=express()
 
-const storageRoot=path.resolve(process.env.FILE_STORAGE_PATH||'./storage')
+const storageRoot=path.resolve(process.env.FILE_STORAGE_PATH||'/data/foreignid-storage')
 const allowedFileTypes=new Set(['application/pdf','image/jpeg','image/png','image/webp','text/plain'])
 function safeFileName(name:string){return String(name||'file').replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,180)}
 const extensionForType=(type:string)=>({ 'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp','text/plain':'txt' } as any)[type]||'bin'
@@ -59,7 +59,7 @@ function invalidDateRange(startDate:any,endDate:any){
 function hasInvalidDate(...values:any[]){
   return values.some(value=>!isValidDate(value))
 }
-const allowedOrigins=(process.env.CORS_ORIGIN||'https://frontend-production-d68e.up.railway.app,http://localhost:3000,http://localhost:5173,http://localhost:4200').split(',').map(x=>x.trim()).filter(Boolean)
+const allowedOrigins=(process.env.CORS_ORIGIN||'http://localhost:3000,http://localhost:5173,http://localhost:4200').split(',').map(x=>x.trim()).filter(Boolean)
 app.use(cors({
   origin:(origin,callback)=>{
     if(!origin||allowedOrigins.includes(origin))return callback(null,true)
@@ -365,13 +365,16 @@ app.get('/api/v1/files/:id/download',requireAuth,async(req:AuthRequest,res)=>{
   }catch{return res.status(404).json({message:'Файл отсутствует в хранилище'})}
 })
 app.delete('/api/v1/files/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
-  const r=await query('SELECT ff.file_url,ff.file_name,ff.kind,f.id AS foreigner_id,f.organization_id FROM foreigner_files ff JOIN foreigners f ON f.id=ff.foreigner_id WHERE ff.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
+  const r=await query('SELECT ff.id,ff.file_url,f.organization_id FROM foreigner_files ff JOIN foreigners f ON f.id=ff.foreigner_id WHERE ff.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
   if(!r.rowCount)return res.status(404).json({message:'Файл не найден'})
-  const file=r.rows[0]
-  if(!String(file.file_url).startsWith('data:')){try{await fs.promises.unlink(path.join(storageRoot,req.user.organization_id,file.file_url))}catch{}}
-  if(file.kind==='PHOTO') await query('UPDATE foreigners SET photo_url=NULL,updated_at=now() WHERE id=$1 AND organization_id=$2',[file.foreigner_id,req.user.organization_id])
+  const storedName=String(r.rows[0].file_url||'')
+  if(/^[a-f0-9-]{36}\.(pdf|jpg|png|webp|txt)$/.test(storedName)){
+    const fullPath=path.join(storageRoot,req.user.organization_id,storedName)
+    await fs.promises.unlink(fullPath).catch(()=>{})
+  }
   await query('DELETE FROM foreigner_files WHERE id=$1',[req.params.id])
-  await audit(req,'DELETE','FILE',req.params.id,{fileName:file.file_name});res.json({ok:true})
+  await audit(req,'DELETE','FILE',req.params.id)
+  res.json({ok:true})
 })
 
 app.get('/api/v1/notifications',requireAuth,async(req:AuthRequest,res)=>{
