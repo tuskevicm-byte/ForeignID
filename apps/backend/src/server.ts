@@ -334,12 +334,20 @@ app.post('/api/v1/photos',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'
   const own=await query('SELECT id FROM foreigners WHERE id=$1 AND organization_id=$2',[foreignerId,req.user.organization_id])
   if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
   try{
+    const previous=await query("SELECT id,file_url FROM foreigner_files WHERE foreigner_id=$1 AND kind='PHOTO' ORDER BY created_at DESC",[foreignerId])
     const stored=await storeProtectedPhoto(req.user.organization_id,fileUrl)
     const r=await query("INSERT INTO foreigner_files(foreigner_id,file_name,file_url,file_type,file_size,kind) VALUES($1,$2,$3,$4,$5,'PHOTO') RETURNING id,file_name,file_type,file_size,kind",[
       foreignerId,'photo'+extensionForType(stored.mime),stored.storedName,stored.mime,stored.size
     ])
     await query('UPDATE foreigners SET photo_url=$1,updated_at=now() WHERE id=$2 AND organization_id=$3',['/api/v1/files/'+r.rows[0].id+'/download',foreignerId,req.user.organization_id])
-    await audit(req,'UPDATE','FOREIGNER',foreignerId,{photoFileId:r.rows[0].id})
+    for(const old of previous.rows){
+      const oldName=String(old.file_url||'')
+      if(old.id!==r.rows[0].id && /^[a-f0-9-]{36}\.(pdf|jpg|png|webp|txt)$/.test(oldName)){
+        await fs.promises.unlink(path.join(storageRoot,req.user.organization_id,oldName)).catch(()=>{})
+        await query('DELETE FROM foreigner_files WHERE id=$1',[old.id])
+      }
+    }
+    await audit(req,'UPDATE','FOREIGNER',foreignerId,{photoFileId:r.rows[0].id,replacedPhotoCount:previous.rows.length})
     res.status(201).json(r.rows[0])
   }catch(e:any){res.status(400).json({message:e?.message||'Не удалось сохранить фото'})}
 })
