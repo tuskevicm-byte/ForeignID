@@ -143,6 +143,7 @@ app.patch('/api/v1/users/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async
   const own=await query('SELECT * FROM users WHERE id=$1 AND organization_id=$2',[req.params.id,req.user.organization_id])
   if(!own.rowCount)return res.status(404).json({message:'Пользователь не найден'})
   if(req.params.id===req.user.id && isActive===false)return res.status(400).json({message:'Нельзя деактивировать текущего пользователя'})
+  if(role!==undefined && !['ORG_ADMIN','OPERATOR','VIEWER'].includes(role))return res.status(400).json({message:'Недопустимая роль'})
   if(req.user.role==='ORG_ADMIN' && role==='ORG_ADMIN' && own.rows[0].role!=='ORG_ADMIN')return res.status(403).json({message:'ORG_ADMIN не может назначать роль администратора'})
   if(password!==undefined && password!==null && String(password).length<12)return res.status(400).json({message:'Пароль должен содержать не менее 12 символов'})
   const {hashPassword}=await import('./auth.js')
