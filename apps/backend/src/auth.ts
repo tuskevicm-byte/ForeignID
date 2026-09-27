@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs'
 import {Request,Response,NextFunction} from 'express'
 import {query} from './db.js'
 
-const secret=process.env.JWT_SECRET || 'dev-only-secret-change-me'
+const secret=process.env.JWT_SECRET
+if(!secret || secret.length<32) throw new Error('JWT_SECRET must be configured and contain at least 32 characters')
 
 export async function hashPassword(password:string){return bcrypt.hash(password,12)}
 export async function verifyPassword(password:string,hash:string){return bcrypt.compare(password,hash)}
