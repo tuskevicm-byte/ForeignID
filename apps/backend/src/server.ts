@@ -144,6 +144,7 @@ app.patch('/api/v1/users/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async
   if(!own.rowCount)return res.status(404).json({message:'Пользователь не найден'})
   if(req.params.id===req.user.id && isActive===false)return res.status(400).json({message:'Нельзя деактивировать текущего пользователя'})
   if(req.user.role==='ORG_ADMIN' && role==='ORG_ADMIN' && own.rows[0].role!=='ORG_ADMIN')return res.status(403).json({message:'ORG_ADMIN не может назначать роль администратора'})
+  if(password!==undefined && password!==null && String(password).length<12)return res.status(400).json({message:'Пароль должен содержать не менее 12 символов'})
   const {hashPassword}=await import('./auth.js')
   const hash=password?await hashPassword(password):null
   const r=await query('UPDATE users SET first_name=COALESCE($1,first_name),last_name=COALESCE($2,last_name),role=COALESCE($3,role),is_active=COALESCE($4,is_active),password_hash=COALESCE($5,password_hash) WHERE id=$6 AND organization_id=$7 RETURNING id,email,first_name,last_name,role,is_active,created_at',[firstName||null,lastName||null,role||null,isActive??null,hash,req.params.id,req.user.organization_id])
