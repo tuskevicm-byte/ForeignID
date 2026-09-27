@@ -126,6 +126,8 @@ app.get('/api/v1/users',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:A
 app.post('/api/v1/users',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),async(req:AuthRequest,res)=>{
   const {email,password,firstName,lastName,role='OPERATOR'}=req.body||{}
   if(!email||!password||!firstName||!lastName)return res.status(400).json({message:'Email, пароль, имя и фамилия обязательны'})
+  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(email)))return res.status(400).json({message:'Некорректный email'})
+  if(String(password).length<12)return res.status(400).json({message:'Пароль должен содержать не менее 12 символов'})
   if(!['ORG_ADMIN','OPERATOR','VIEWER'].includes(role))return res.status(400).json({message:'Недопустимая роль'})
   if(req.user.role==='ORG_ADMIN' && role==='ORG_ADMIN')return res.status(403).json({message:'ORG_ADMIN не может создавать другого администратора'})
   const {hashPassword}=await import('./auth.js')
