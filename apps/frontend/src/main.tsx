@@ -399,7 +399,8 @@ function App(){
   }
 
   function exportExcel(){
-    const rows=data.deadlines||[]    const esc=(v:any)=>{const s=String(v??'');return '"'+s.replace(/"/g,'""')+'"'}
+    const rows=data.deadlines||[];
+    const esc=(v:any)=>{const s=String(v??'');return '"'+s.replace(/"/g,'""')+'"'}
     const csv='ФИО,Тип,Запись,Срок,Статус\n'+rows.map((x:any)=>[x.last_name+' '+x.first_name,x.item_type,x.item_name,x.end_date,x.deadline_status].map(esc).join(',')).join('\n')
     const blob=new Blob(['\\ufeff',csv],{type:'text/csv;charset=utf-8'})
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='foreignid-report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
