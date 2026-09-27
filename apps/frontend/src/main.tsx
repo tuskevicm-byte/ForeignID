@@ -141,7 +141,7 @@ function App(){
     try{
       if(active==='Главная'){const [d,deadlines]=await Promise.all([api('/dashboard'),api('/deadlines')]);setData({...d,deadlines:deadlines.data||[]})} else if(active==='Отчёты'){const [d,report]=await Promise.all([api('/dashboard'),api('/reports/deadlines')]);setData({...d,deadlines:report.data||[]})}
       else if(active==='Контроль сроков')setData(await api('/deadlines?page='+sectionPage+'&pageSize='+sectionPageSize))
-      else if(active==='Документы'){const [d,v]=await Promise.all([api('/documents?page='+sectionPage+'&pageSize='+sectionPageSize),api('/visas?page='+sectionPage+'&pageSize='+sectionPageSize)]);setData({documents:d.data||[],visas:v.data||[],documentsTotal:Number(d.total||0),visasTotal:Number(v.total||0)})}
+      else if(active==='Документы'){const [d,v,r]=await Promise.all([api('/documents?page='+sectionPage+'&pageSize='+sectionPageSize),api('/visas?page='+sectionPage+'&pageSize='+sectionPageSize),api('/registrations?page='+sectionPage+'&pageSize='+sectionPageSize)]);setData({documents:d.data||[],visas:v.data||[],registrations:r.data||[],documentsTotal:Number(d.total||0),visasTotal:Number(v.total||0),registrationsTotal:Number(r.total||0)})}
       else if(active==='История')setData(await api('/history?page='+sectionPage+'&pageSize='+sectionPageSize))
       else if(active==='Е-паслуга')setData(await api('/applications?page='+sectionPage+'&pageSize='+sectionPageSize))
     }catch(e:any){setError(e.message)}
@@ -497,6 +497,12 @@ function App(){
             <div><b>{v.last_name} {v.first_name}</b><span>{v.visa_type}{v.visa_number?' №'+v.visa_number:''} · до {v.end_date||'—'}</span></div>
             <button type="button" onClick={()=>{openForeigner({id:v.foreigner_id});setDetailTab('Виза / Разрешение')}}>Открыть карточку</button>
           </div>) : <p className="muted">Виз и разрешений пока нет.</p>}
+        </div>
+        <div className="panel pad"><h2>Регистрации</h2>
+          {(data.registrations||[]).length ? (data.registrations||[]).map((r:any)=><div className="record" key={r.id}>
+            <div><b>{r.last_name} {r.first_name}</b><span>{r.registration_type||'Регистрация'}{r.registration_number?' №'+r.registration_number:''} · с {r.start_date||'—'} · до {r.end_date||'—'}</span></div>
+            <button type="button" onClick={()=>{openForeigner({id:r.foreigner_id});setDetailTab('Регистрация')}}>Открыть карточку</button>
+          </div>) : <p className="muted">Регистраций пока нет.</p>}
         </div>
       </div>
     }
