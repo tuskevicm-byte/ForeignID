@@ -1,4 +1,5 @@
 FROM node:22-alpine
+# Keep Railway production deploy synchronized with the current main branch.
 WORKDIR /app
 COPY package.json ./
 RUN npm install --no-audit --no-fund
