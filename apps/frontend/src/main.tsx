@@ -549,6 +549,19 @@ function App(){
     return null
   }
 
+  if(!token) return <div className="login-shell">
+    <div className="panel pad login-card">
+      <h1>◈ ForeignID</h1>
+      <p className="muted">Вход в систему учёта иностранных граждан</p>
+      {error&&<div className="error">{error}</div>}
+      <form onSubmit={login} className="stack">
+        <label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="username" required/></label>
+        <label>Пароль<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/></label>
+        <button className="primary" type="submit">Войти</button>
+      </form>
+    </div>
+  </div>
+
   return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null);setWizard(false)}}>{x}</button>)}<button className="logout" onClick={()=>{localStorage.removeItem('token');setToken(null);setSelected(null);setWizard(false)}}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, документу, телефону..." value={q} onChange={e=>setQ(e.target.value)}/><span>{currentUser?`${currentUser.first_name||''} ${currentUser.last_name||''} · ${currentUser.role}`:'Пользователь'}</span></header>{selected?Detail():Section()}{wizard&&Wizard()}</main></div>
 }
 createRoot(document.getElementById('root')!).render(<App/>)
