@@ -556,3 +556,5 @@ createRoot(document.getElementById('root')!).render(<App/>)
 // Railway source sync: force deployment from latest verified GitHub commit.
 // Railway deploy trigger: 2026-09-25
 // Deployment sync: 2026-09-25
+
+// Railway sync trigger: current main deployment 2026-09-28
