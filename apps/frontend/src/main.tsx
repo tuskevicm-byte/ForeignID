@@ -5,7 +5,7 @@ import React from 'react'
 import {createRoot} from 'react-dom/client'
 import './styles.css'
 
-const API=(import.meta.env.VITE_API_URL||'https://backend-docs-fix-production.up.railway.app/api/v1').replace(/\/$/,'')
+const API=(import.meta.env.VITE_API_URL||'https://backend-main-current-production.up.railway.app/api/v1').replace(/\/$/,'')
 const blank={firstName:'',middleName:'',lastName:'',citizenship:'',birthDate:'',gender:'',phone:'',email:'',entryDate:'',stayBasis:'',stayAddress:'',insuranceCompany:'',insurancePolicyNumber:'',insuranceEndDate:'',photoUrl:''}
 
 function App(){
