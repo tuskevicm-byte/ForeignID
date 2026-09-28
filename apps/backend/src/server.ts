@@ -59,7 +59,7 @@ function invalidDateRange(startDate:any,endDate:any){
 function hasInvalidDate(...values:any[]){
   return values.some(value=>!isValidDate(value))
 }
-const allowedOrigins=(process.env.CORS_ORIGIN||'https://frontend-current-2-production.up.railway.app,http://localhost:3000,http://localhost:5173,http://localhost:4200').split(',').map(x=>x.trim()).filter(Boolean)
+const allowedOrigins=(process.env.CORS_ORIGIN||'https://frontend-current-2-production.up.railway.app,https://frontend-login-fix-production.up.railway.app,http://localhost:3000,http://localhost:5173,http://localhost:4200').split(',').map(x=>x.trim()).filter(Boolean)
 app.use(cors({
   origin:(origin,callback)=>{
     if(!origin||allowedOrigins.includes(origin))return callback(null,true)
