@@ -161,3 +161,20 @@ CREATE INDEX IF NOT EXISTS idx_gov_app_status ON government_applications(status)
 CREATE INDEX IF NOT EXISTS idx_gov_app_external_reference ON government_applications(external_reference);
 CREATE INDEX IF NOT EXISTS idx_gov_app_history_application ON government_application_status_history(application_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_gov_integration_logs_application ON government_integration_logs(application_id, created_at DESC);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_last_used_step bigint;
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  revoked_at timestamptz,
+  replaced_by_hash text
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at);\n
