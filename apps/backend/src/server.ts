@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import 'dotenv/config'
 import {query,pool} from './db.js'
-import {requireAuth,allow,signToken,verifyPassword,AuthRequest} from './auth.js'
+import {requireAuth,allow,signToken,verifyPassword,AuthRequest,createRefreshToken,hashRefreshToken,createTwoFactorSecret,twoFactorUri,verifyTwoFactorCode} from './auth.js'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -14,6 +14,14 @@ const storageRoot=path.resolve(process.env.FILE_STORAGE_PATH||'/data/foreignid-s
 const allowedFileTypes=new Set(['application/pdf','image/jpeg','image/png','image/webp','text/plain'])
 function safeFileName(name:string){return String(name||'file').replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,180)}
 const extensionForType=(type:string)=>({ 'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp','text/plain':'txt' } as any)[type]||'bin'
+function hasValidFileSignature(mime:string,buffer:Buffer){
+  if(mime==='application/pdf')return buffer.subarray(0,5).toString()==='%PDF-'
+  if(mime==='image/jpeg')return buffer.length>=3&&buffer[0]===0xff&&buffer[1]===0xd8&&buffer[2]===0xff
+  if(mime==='image/png')return buffer.length>=8&&buffer.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
+  if(mime==='image/webp')return buffer.length>=12&&buffer.subarray(0,4).toString()==='RIFF'&&buffer.subarray(8,12).toString()==='WEBP'
+  if(mime==='text/plain')return !buffer.subarray(0,1000).includes(0)
+  return false
+}
 async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:string){
   const match=/^data:([^;]+);base64,(.*)$/.exec(String(fileUrl||''))
   if(!match)throw new Error('Файл должен быть загружен как data URL')
@@ -22,6 +30,7 @@ async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:
   if(!/^[A-Za-z0-9+/]*={0,2}$/.test(raw)||raw.length%4!==0)throw new Error('Некорректное содержимое файла')
   const buffer=Buffer.from(raw,'base64')
   if(!buffer.length||buffer.length>1500000)throw new Error('Размер файла должен быть от 1 байта до 1.5 МБ')
+  if(!hasValidFileSignature(mime,buffer))throw new Error('Содержимое файла не соответствует заявленному типу')
   const dir=path.join(storageRoot,organizationId); await fs.promises.mkdir(dir,{recursive:true})
   const storedName=crypto.randomUUID()+'.'+extensionForType(mime)
   const fullPath=path.join(dir,storedName); await fs.promises.writeFile(fullPath,buffer)
@@ -70,6 +79,29 @@ app.use(cors({
   allowedHeaders:['Content-Type','Authorization']
 }))
 app.use(express.json({limit:'2mb'}))
+app.use((_req,res,next)=>{
+  res.setHeader('X-Content-Type-Options','nosniff')
+  res.setHeader('X-Frame-Options','DENY')
+  res.setHeader('Referrer-Policy','no-referrer')
+  res.setHeader('Permissions-Policy','camera=(),microphone=(),geolocation=()')
+  next()
+})
+
+const loginAttempts=new Map<string,{count:number,blockedUntil:number}>()
+function checkLoginRateLimit(key:string){
+  const now=Date.now(),entry=loginAttempts.get(key)
+  if(!entry||entry.blockedUntil<=now)return true
+  return false
+}
+function recordLoginFailure(key:string){
+  const now=Date.now(),entry=loginAttempts.get(key)||{count:0,blockedUntil:0}
+  entry.count+=1
+  if(entry.count>=8){entry.blockedUntil=now+15*60*1000;entry.count=0}
+  loginAttempts.set(key,entry)
+}
+function clearLoginFailures(key:string){loginAttempts.delete(key)}
+function refreshDays(){return Math.max(1,Math.min(30,Number(process.env.REFRESH_TOKEN_DAYS)||7))}
+
 
 async function audit(req:AuthRequest, action:string, entityType:string, entityId:any, details:any={}) {
   await query('INSERT INTO audit_logs(organization_id,user_id,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5,$6)',
@@ -82,15 +114,85 @@ app.get('/api/v1/health',async(_req,res)=>{
 })
 
 app.post('/api/v1/auth/login',async(req,res)=>{
-  const {email,password}=req.body||{}
+  const {email,password,twoFactorCode}=req.body||{}
+  const clientKey=(req.ip||'unknown')+'|'+String(email||'').trim().toLowerCase()
+  if(!checkLoginRateLimit(clientKey))return res.status(429).json({message:'Слишком много попыток входа. Повторите позже.'})
   if(!email||!password)return res.status(400).json({message:'Email and password are required'})
   const r=await query('SELECT * FROM users WHERE lower(email)=lower($1) AND is_active=true',[email])
   const user=r.rows[0]
-  if(!user || !(await verifyPassword(password,user.password_hash))) return res.status(401).json({message:'Invalid credentials'})
-  res.json({accessToken:signToken(user),user:{id:user.id,email:user.email,firstName:user.first_name,lastName:user.last_name,role:user.role}})
+  if(!user || !(await verifyPassword(password,user.password_hash))){
+    recordLoginFailure(clientKey)
+    return res.status(401).json({message:'Invalid credentials'})
+  }
+  if(user.two_factor_enabled){
+    if(!twoFactorCode)return res.status(401).json({code:'TWO_FACTOR_REQUIRED',message:'Требуется код двухфакторной аутентификации'})
+    const currentStep=Math.floor(Date.now()/1000/30)
+    if(Number(user.two_factor_last_used_step||-1)===currentStep || !verifyTwoFactorCode(user.two_factor_secret,twoFactorCode)){
+      recordLoginFailure(clientKey)
+      return res.status(401).json({message:'Неверный или уже использованный код 2FA'})
+    }
+    await query('UPDATE users SET two_factor_last_used_step=$1 WHERE id=$2',[currentStep,user.id])
+  }
+  clearLoginFailures(clientKey)
+  const refresh=createRefreshToken()
+  await query('DELETE FROM refresh_tokens WHERE user_id=$1 AND (expires_at<NOW() OR revoked_at IS NOT NULL)',[user.id])
+  await query('INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,NOW()+($3::int*INTERVAL \'1 day\'))',[user.id,refresh.hash,refreshDays()])
+  res.json({accessToken:signToken(user),refreshToken:refresh.raw,user:{id:user.id,email:user.email,firstName:user.first_name,lastName:user.last_name,role:user.role,twoFactorEnabled:Boolean(user.two_factor_enabled)}})
 })
 
 app.get('/api/v1/auth/me',requireAuth,(req:AuthRequest,res)=>res.json({user:req.user}))
+
+app.post('/api/v1/auth/refresh',async(req,res)=>{
+  const raw=String(req.body?.refreshToken||'')
+  if(!raw)return res.status(400).json({message:'Refresh token is required'})
+  const hash=hashRefreshToken(raw)
+  const r=await query('SELECT rt.*,u.id user_id,u.email,u.first_name,u.last_name,u.organization_id,u.role,u.is_active,u.two_factor_enabled FROM refresh_tokens rt JOIN users u ON u.id=rt.user_id WHERE rt.token_hash=$1 AND rt.revoked_at IS NULL AND rt.expires_at>NOW()',[hash])
+  const row=r.rows[0]
+  if(!row||!row.is_active)return res.status(401).json({message:'Invalid or expired refresh token'})
+  const nextToken=createRefreshToken()
+  const client=await pool.connect()
+  try{
+    await client.query('BEGIN')
+    await client.query('UPDATE refresh_tokens SET revoked_at=NOW(),replaced_by_hash=$1 WHERE token_hash=$2 AND revoked_at IS NULL',[nextToken.hash,hash])
+    await client.query('INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,NOW()+($3::int*INTERVAL \'1 day\'))',[row.user_id,nextToken.hash,refreshDays()])
+    await client.query('DELETE FROM refresh_tokens WHERE user_id=$1 AND (expires_at<NOW() OR revoked_at IS NOT NULL)',[row.user_id])
+    await client.query('COMMIT')
+  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
+  const user={id:row.user_id,email:row.email,first_name:row.first_name,last_name:row.last_name,organization_id:row.organization_id,role:row.role}
+  res.json({accessToken:signToken(user),refreshToken:nextToken.raw,user:{id:user.id,email:user.email,firstName:user.first_name,lastName:user.last_name,role:user.role,twoFactorEnabled:Boolean(row.two_factor_enabled)}})
+})
+
+app.post('/api/v1/auth/logout',async(req,res)=>{
+  const raw=String(req.body?.refreshToken||'')
+  if(raw)await query('UPDATE refresh_tokens SET revoked_at=COALESCE(revoked_at,NOW()) WHERE token_hash=$1',[hashRefreshToken(raw)])
+  res.json({ok:true})
+})
+
+app.post('/api/v1/auth/2fa/setup',requireAuth,async(req:AuthRequest,res)=>{
+  const secretValue=createTwoFactorSecret()
+  await query('UPDATE users SET two_factor_secret=$1,two_factor_enabled=false,two_factor_last_used_step=NULL WHERE id=$2',[secretValue,req.user.id])
+  res.json({secret:secretValue,otpauthUri:twoFactorUri(req.user.email,secretValue),message:'Секрет создан. Добавьте его в приложение-аутентификатор и подтвердите кодом.'})
+})
+
+app.post('/api/v1/auth/2fa/enable',requireAuth,async(req:AuthRequest,res)=>{
+  const code=String(req.body?.code||'')
+  const r=await query('SELECT two_factor_secret FROM users WHERE id=$1',[req.user.id])
+  const secretValue=r.rows[0]?.two_factor_secret
+  const currentStep=Math.floor(Date.now()/1000/30)
+  if(!secretValue||!verifyTwoFactorCode(secretValue,code))return res.status(400).json({message:'Неверный код 2FA'})
+  await query('UPDATE users SET two_factor_enabled=true,two_factor_last_used_step=$1 WHERE id=$2',[currentStep,req.user.id])
+  res.json({ok:true,twoFactorEnabled:true})
+})
+
+app.post('/api/v1/auth/2fa/disable',requireAuth,async(req:AuthRequest,res)=>{
+  const {password,code}=req.body||{}
+  const r=await query('SELECT password_hash,two_factor_secret,two_factor_enabled FROM users WHERE id=$1',[req.user.id])
+  const row=r.rows[0]
+  if(!row||!(await verifyPassword(String(password||''),row.password_hash)))return res.status(400).json({message:'Неверный пароль'})
+  if(row.two_factor_enabled&&!verifyTwoFactorCode(row.two_factor_secret,String(code||'')))return res.status(400).json({message:'Неверный код 2FA'})
+  await query('UPDATE users SET two_factor_enabled=false,two_factor_secret=NULL,two_factor_last_used_step=NULL WHERE id=$1',[req.user.id])
+  res.json({ok:true,twoFactorEnabled:false})
+})
 
 app.post('/api/v1/foreigners/import',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'),async(req:AuthRequest,res)=>{
   const rows=Array.isArray(req.body?.rows)?req.body.rows:[]
