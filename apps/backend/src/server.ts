@@ -4,6 +4,7 @@ import 'dotenv/config'
 import {query,pool} from './db.js'
 import {requireAuth,allow,signToken,verifyPassword,AuthRequest,createRefreshToken,hashRefreshToken,createTwoFactorSecret,twoFactorUri,verifyTwoFactorCode} from './auth.js'
 import crypto from 'node:crypto'
+import {S3Client,PutObjectCommand,GetObjectCommand,DeleteObjectCommand} from '@aws-sdk/client-s3'
 import fs from 'node:fs'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
@@ -11,6 +12,11 @@ import {fileURLToPath} from 'node:url'
 const app=express()
 
 const storageRoot=path.resolve(process.env.FILE_STORAGE_PATH||'/data/foreignid-storage')
+const s3Enabled=String(process.env.FILE_STORAGE_DRIVER||'local').toLowerCase()==='s3'
+const s3Client=s3Enabled&&process.env.S3_ENDPOINT&&process.env.S3_BUCKET&&process.env.S3_ACCESS_KEY_ID&&process.env.S3_SECRET_ACCESS_KEY
+  ? new S3Client({region:process.env.S3_REGION||'auto',endpoint:process.env.S3_ENDPOINT,forcePathStyle:String(process.env.S3_FORCE_PATH_STYLE||'false')==='true',credentials:{accessKeyId:process.env.S3_ACCESS_KEY_ID,secretAccessKey:process.env.S3_SECRET_ACCESS_KEY}})
+  : null
+if(s3Enabled&&!s3Client)throw new Error('S3 storage is enabled but S3 configuration is incomplete')
 const allowedFileTypes=new Set(['application/pdf','image/jpeg','image/png','image/webp','text/plain'])
 function safeFileName(name:string){return String(name||'file').replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,180)}
 const extensionForType=(type:string)=>({ 'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp','text/plain':'txt' } as any)[type]||'bin'
@@ -31,8 +37,13 @@ async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:
   const buffer=Buffer.from(raw,'base64')
   if(!buffer.length||buffer.length>1500000)throw new Error('Размер файла должен быть от 1 байта до 1.5 МБ')
   if(!hasValidFileSignature(mime,buffer))throw new Error('Содержимое файла не соответствует заявленному типу')
-  const dir=path.join(storageRoot,organizationId); await fs.promises.mkdir(dir,{recursive:true})
   const storedName=crypto.randomUUID()+'.'+extensionForType(mime)
+  if(s3Client){
+    const key=organizationId+'/'+storedName
+    await s3Client.send(new PutObjectCommand({Bucket:process.env.S3_BUCKET!,Key:key,Body:buffer,ContentType:mime}))
+    return {storedName:'s3:'+key,size:buffer.length,mime}
+  }
+  const dir=path.join(storageRoot,organizationId); await fs.promises.mkdir(dir,{recursive:true})
   const fullPath=path.join(dir,storedName); await fs.promises.writeFile(fullPath,buffer)
   return {storedName,fullPath,size:buffer.length,mime}
 }
@@ -452,8 +463,12 @@ app.post('/api/v1/photos',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR'
     await query('UPDATE foreigners SET photo_url=$1,updated_at=now() WHERE id=$2 AND organization_id=$3',['/api/v1/files/'+r.rows[0].id+'/download',foreignerId,req.user.organization_id])
     for(const old of previous.rows){
       const oldName=String(old.file_url||'')
-      if(old.id!==r.rows[0].id && /^[a-f0-9-]{36}\.(pdf|jpg|png|webp|txt)$/.test(oldName)){
-        await fs.promises.unlink(path.join(storageRoot,req.user.organization_id,oldName)).catch(()=>{})
+      if(old.id!==r.rows[0].id){
+        if(oldName.startsWith('s3:')&&s3Client){
+          await s3Client.send(new DeleteObjectCommand({Bucket:process.env.S3_BUCKET!,Key:oldName.slice(3)})).catch(()=>{})
+        }else if(/^[a-f0-9-]{36}\.(pdf|jpg|png|webp|txt)$/.test(oldName)){
+          await fs.promises.unlink(path.join(storageRoot,req.user.organization_id,oldName)).catch(()=>{})
+        }
         await query('DELETE FROM foreigner_files WHERE id=$1',[old.id])
       }
     }
@@ -469,7 +484,7 @@ app.post('/api/v1/files',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN','OPERATOR')
   if(!own.rowCount)return res.status(404).json({message:'Иностранец не найден'})
   try{
     const stored=await storeProtectedFile(req.user.organization_id,fileUrl,fileType)
-    const r=await query('INSERT INTO foreigner_files(foreigner_id,file_name,file_url,file_type,file_size) VALUES($1,$2,$3,$4,$5) RETURNING *',[foreignerId,fileName,stored.storedName,stored.mime,stored.size])
+    const r=await query('INSERT INTO foreigner_files(foreigner_id,file_name,file_url,file_type,file_size) VALUES($1,$2,$3,$4,$5) RETURNING *',[foreignerId,safeFileName(fileName),stored.storedName,stored.mime,stored.size])
     await audit(req,'CREATE','FILE',r.rows[0].id,{fileName,fileSize:stored.size})
     res.status(201).json({...r.rows[0],downloadUrl:'/api/v1/files/'+r.rows[0].id+'/download'})
   }catch(e:any){res.status(400).json({message:e?.message||'Не удалось сохранить файл'})}
@@ -479,12 +494,19 @@ app.get('/api/v1/files/:id/download',requireAuth,async(req:AuthRequest,res)=>{
   if(!r.rowCount)return res.status(404).json({message:'Файл не найден'})
   const file=r.rows[0]
   const storedName=String(file.file_url||'')
-  if(!/^[a-f0-9-]{36}\.(pdf|jpg|png|webp|txt)$/.test(storedName))return res.status(404).json({message:'Файл отсутствует в защищённом хранилище'})
-  const fullPath=path.join(storageRoot,req.user.organization_id,storedName)
+  res.type(file.file_type||'application/octet-stream')
+  res.setHeader('Content-Disposition','attachment; filename*=UTF-8\'\''+encodeURIComponent(String(file.file_name||'file')))
   try{
+    if(storedName.startsWith('s3:')&&s3Client){
+      const object=await s3Client.send(new GetObjectCommand({Bucket:process.env.S3_BUCKET!,Key:storedName.slice(3)}))
+      const body:any=object.Body
+      const chunks:Buffer[]=[]
+      for await(const chunk of body)chunks.push(Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk))
+      return res.send(Buffer.concat(chunks))
+    }
+    if(!/^[a-f0-9-]{36}\.(pdf|jpg|png|webp|txt)$/.test(storedName))return res.status(404).json({message:'Файл отсутствует в защищённом хранилище'})
+    const fullPath=path.join(storageRoot,req.user.organization_id,storedName)
     await fs.promises.access(fullPath)
-    res.type(file.file_type||'application/octet-stream')
-    res.setHeader('Content-Disposition','attachment; filename*=UTF-8\'\''+encodeURIComponent(String(file.file_name||'file')))
     return res.sendFile(fullPath)
   }catch{return res.status(404).json({message:'Файл отсутствует в хранилище'})}
 })
@@ -492,7 +514,8 @@ app.delete('/api/v1/files/:id',requireAuth,allow('SUPER_ADMIN','ORG_ADMIN'),asyn
   const r=await query('SELECT ff.id,ff.file_url,f.organization_id FROM foreigner_files ff JOIN foreigners f ON f.id=ff.foreigner_id WHERE ff.id=$1 AND f.organization_id=$2',[req.params.id,req.user.organization_id])
   if(!r.rowCount)return res.status(404).json({message:'Файл не найден'})
   const storedName=String(r.rows[0].file_url||'')
-  if(/^[a-f0-9-]{36}\.(pdf|jpg|png|webp|txt)$/.test(storedName)){
+  if(storedName.startsWith('s3:')&&s3Client)await s3Client.send(new DeleteObjectCommand({Bucket:process.env.S3_BUCKET!,Key:storedName.slice(3)})).catch(()=>{})
+  else if(/^[a-f0-9-]{36}\.(pdf|jpg|png|webp|txt)$/.test(storedName)){
     const fullPath=path.join(storageRoot,req.user.organization_id,storedName)
     await fs.promises.unlink(fullPath).catch(()=>{})
   }
