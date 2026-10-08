@@ -1,5 +1,8 @@
 [build]
   command = "cd apps/frontend && npm install --no-audit --no-fund && npm run build"
+
+[build.environment]
+  VITE_API_URL = "/api/v1"
   publish = "apps/frontend/dist"
 
 [[redirects]]
