@@ -1,10 +1,18 @@
-# Next implementation steps
+# Актуальные следующие шаги
 
-1. Add Prisma migrations or run `schema.sql` during deployment.
-2. Add refresh-token storage/rotation.
-3. Add full CRUD for foreigners, documents, visas and registrations.
-4. Add protected object storage + antivirus scanning.
-5. Add deadline worker and notifications.
-6. Add audit middleware for all sensitive actions.
-7. Add 2FA.
-8. Add official Government Service Adapter only after confirming the approved API/protocol for the exact Е-Паслуга procedure.
+## Выполнено в версии 0.3.0
+- Исправлена TypeScript-ошибка JWT secret, из-за которой падал backend CI.
+- Добавлены refresh-токены с ротацией и серверным отзывом.
+- Добавлена TOTP 2FA в «Настройках».
+- Добавлено ограничение серии неудачных попыток входа.
+- Добавлена проверка сигнатуры загружаемых файлов.
+- Production API сведён к актуальному Railway backend.
+- Перед каждым backend-деплоем выполняются миграция схемы и seed.
+- Для файлов в production подключён persistent volume.
+
+## Оставшиеся внешние production-настройки
+1. При необходимости горизонтального масштабирования файлового сервиса заменить volume на S3-совместимое object storage и хранить объекты там.
+2. Подключить внешний антивирусный сканер перед сохранением/выдачей файлов.
+3. Настроить автоматические резервные копии PostgreSQL и периодическую проверку восстановления.
+4. Настроить HTTPS/custom domain и хранение всех production-секретов только в переменных окружения.
+5. Подключить официальный Government Service Adapter только после подтверждения утверждённого протокола конкретной процедуры Е-паслуги.
