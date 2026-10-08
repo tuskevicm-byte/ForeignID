@@ -51,9 +51,9 @@ async function scanWithClamAV(buffer:Buffer){
       }
       socket.write(Buffer.alloc(4))
     })
-    socket.on('data',data=>{response+=data.toString('utf8');if(response.includes('\\n')){clearTimeout(timer);const clean=/stream:\\s+OK\\s*/.test(response);finish(clean?resolve:reject,clean?{clean:true}:{message:'Файл отклонён антивирусом',response})}})
+    socket.on('data',data=>{response+=data.toString('utf8');if(response.includes('\n')){clearTimeout(timer);const clean=/stream:\s+OK\s*/.test(response);finish(clean?resolve:reject,clean?{clean:true}:{message:'Файл отклонён антивирусом',response})}})
     socket.on('error',err=>{clearTimeout(timer);finish(reject,new Error('Антивирусный сканер недоступен: '+err.message))})
-    socket.on('close',()=>{clearTimeout(timer);if(!settled){if(/OK\\s*$/.test(response))finish(resolve,{clean:true});else finish(reject,new Error('Антивирусный сканер не подтвердил чистоту файла'))}})
+    socket.on('close',()=>{clearTimeout(timer);if(!settled){if(/OK\s*$/.test(response))finish(resolve,{clean:true});else finish(reject,new Error('Антивирусный сканер не подтвердил чистоту файла'))}})
   })
 }
 async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:string){
