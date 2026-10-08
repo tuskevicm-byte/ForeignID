@@ -7,6 +7,7 @@ import crypto from 'node:crypto'
 import {S3Client,PutObjectCommand,GetObjectCommand,DeleteObjectCommand} from '@aws-sdk/client-s3'
 import fs from 'node:fs'
 import path from 'node:path'
+import net from 'node:net'
 import {fileURLToPath} from 'node:url'
 
 const app=express()
@@ -28,6 +29,33 @@ function hasValidFileSignature(mime:string,buffer:Buffer){
   if(mime==='text/plain')return !buffer.subarray(0,1000).includes(0)
   return false
 }
+async function scanWithClamAV(buffer:Buffer){
+  const host=String(process.env.CLAMAV_HOST||'').trim()
+  const port=Number(process.env.CLAMAV_PORT||3310)
+  const required=String(process.env.CLAMAV_REQUIRED||'false').toLowerCase()==='true'
+  if(!host){
+    if(required)throw new Error('Антивирусный сканер не настроен')
+    return {clean:true,skipped:true}
+  }
+  return await new Promise<{clean:boolean,skipped?:boolean}>((resolve,reject)=>{
+    const socket=net.createConnection({host,port})
+    let response=''
+    let settled=false
+    const finish=(fn:any,value:any)=>{if(settled)return;settled=true;socket.destroy();fn(value)}
+    const timer=setTimeout(()=>finish(reject,new Error('Антивирусный сканер не ответил вовремя')),15000)
+    socket.on('connect',()=>{
+      socket.write(Buffer.from([122,73,78,83,84,82,69,65,77,0])) // zINSTREAM
+      for(let offset=0;offset<buffer.length;offset+=65536){
+        const chunk=buffer.subarray(offset,Math.min(buffer.length,offset+65536))
+        const size=Buffer.alloc(4);size.writeUInt32BE(chunk.length,0);socket.write(size);socket.write(chunk)
+      }
+      socket.write(Buffer.alloc(4))
+    })
+    socket.on('data',data=>{response+=data.toString('utf8');if(response.includes('\\n')){clearTimeout(timer);const clean=/stream:\\s+OK\\s*/.test(response);finish(clean?resolve:reject,clean?{clean:true}:{message:'Файл отклонён антивирусом',response})}})
+    socket.on('error',err=>{clearTimeout(timer);finish(reject,new Error('Антивирусный сканер недоступен: '+err.message))})
+    socket.on('close',()=>{clearTimeout(timer);if(!settled){if(/OK\\s*$/.test(response))finish(resolve,{clean:true});else finish(reject,new Error('Антивирусный сканер не подтвердил чистоту файла'))}})
+  })
+}
 async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:string){
   const match=/^data:([^;]+);base64,(.*)$/.exec(String(fileUrl||''))
   if(!match)throw new Error('Файл должен быть загружен как data URL')
@@ -37,6 +65,7 @@ async function storeProtectedFile(organizationId:string,fileUrl:string,fileType:
   const buffer=Buffer.from(raw,'base64')
   if(!buffer.length||buffer.length>1500000)throw new Error('Размер файла должен быть от 1 байта до 1.5 МБ')
   if(!hasValidFileSignature(mime,buffer))throw new Error('Содержимое файла не соответствует заявленному типу')
+  await scanWithClamAV(buffer)
   const storedName=crypto.randomUUID()+'.'+extensionForType(mime)
   if(s3Client){
     const key=organizationId+'/'+storedName
