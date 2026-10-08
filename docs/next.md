@@ -11,8 +11,8 @@
 - Для файлов в production подключён persistent volume.
 
 ## Оставшиеся внешние production-настройки
-1. Production object storage уже подключён через Railway S3-compatible bucket; persistent volume оставлен как резервный local fallback.
-2. Подключить внешний антивирусный сканер перед сохранением/выдачей файлов.
-3. Настроить автоматические резервные копии PostgreSQL и периодическую проверку восстановления.
-4. При необходимости настроить собственный HTTPS/custom domain; Railway service domains уже используются для production.
+1. Production object storage подключён через Railway S3-compatible bucket; persistent volume оставлен как резервный fallback.
+2. ClamAV подключён к backend по приватной Railway-сети; перед сохранением файл сканируется.
+3. Автоматический PostgreSQL backup настроен ежедневно в 03:00 UTC с хранением 30 дней.
+4. При необходимости добавить собственный custom domain поверх Railway HTTPS.
 5. Подключить официальный Government Service Adapter только после подтверждения утверждённого протокола конкретной процедуры Е-паслуги.
