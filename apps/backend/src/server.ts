@@ -82,7 +82,7 @@ function hasInvalidDate(...values:any[]){
 const allowedOrigins=(process.env.CORS_ORIGIN||'https://frontend-main-ru-production.up.railway.app,http://localhost:3000,http://localhost:5173,http://localhost:4200').split(',').map(x=>x.trim()).filter(Boolean)
 app.use(cors({
   origin:(origin,callback)=>{
-    if(!origin||allowedOrigins.includes(origin))return callback(null,true)
+    if(!origin||allowedOrigins.includes(origin)||/^https:\/\/[a-z0-9-]+\.netlify\.app$/.test(origin))return callback(null,true)
     return callback(new Error('CORS not allowed'))
   },
   credentials:true,
