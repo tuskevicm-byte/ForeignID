@@ -10,8 +10,13 @@ const blank={firstName:'',middleName:'',lastName:'',citizenship:'',birthDate:'',
 
 function App(){
   const [token,setToken]=React.useState(localStorage.getItem('token'))
-  const [email,setEmail]=React.useState('admin@example.local')
-  const [password,setPassword]=React.useState('ChangeMe-123!')
+  const [email,setEmail]=React.useState('')
+  const [password,setPassword]=React.useState('')
+  const [twoFactorCode,setTwoFactorCode]=React.useState('')
+  const [twoFactorRequired,setTwoFactorRequired]=React.useState(false)
+  const [twoFactorSetup,setTwoFactorSetup]=React.useState<any>(null)
+  const [twoFactorDisablePassword,setTwoFactorDisablePassword]=React.useState('')
+  const [twoFactorDisableCode,setTwoFactorDisableCode]=React.useState('')
   const [active,setActive]=React.useState('Главная')
   const [q,setQ]=React.useState('')
   const [error,setError]=React.useState('')
@@ -54,16 +59,28 @@ function App(){
   const [sectionPage,setSectionPage]=React.useState(1)
   const sectionPageSize=25
 
-  async function api(path:string,opts:any={}){
-    const headers:any={'Content-Type':'application/json',...(opts.headers||{})}
-    if(token)headers.Authorization='Bearer '+token
-    const r=await fetch(API+path,{...opts,headers})
-    const d=await r.json().catch(()=>({}))
+  async function api(path:string,opts:any={},allowRefresh=true){
+    const send=async(accessToken:string|null)=>{
+      const headers:any={'Content-Type':'application/json',...(opts.headers||{})}
+      if(accessToken)headers.Authorization='Bearer '+accessToken
+      return fetch(API+path,{...opts,headers})
+    }
+    let r=await send(token)
+    let d=await r.json().catch(()=>({}))
+    if(r.status===401&&allowRefresh&&!['/auth/login','/auth/refresh'].includes(path)){
+      const savedRefresh=localStorage.getItem('refreshToken')
+      if(savedRefresh){
+        const rr=await fetch(API+'/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken:savedRefresh})})
+        const rd=await rr.json().catch(()=>({}))
+        if(rr.ok&&rd.accessToken&&rd.refreshToken){
+          localStorage.setItem('token',rd.accessToken);localStorage.setItem('refreshToken',rd.refreshToken);setToken(rd.accessToken);setCurrentUser(rd.user)
+          r=await send(rd.accessToken);d=await r.json().catch(()=>({}))
+        }
+      }
+    }
     if(r.status===401){
-      localStorage.removeItem('token')
-      setToken('')
-      setSelected(null)
-      setWizard(false)
+      localStorage.removeItem('token');localStorage.removeItem('refreshToken')
+      setToken('');setCurrentUser(null);setSelected(null);setWizard(false)
       throw new Error('Сессия истекла. Войдите в систему заново.')
     }
     if(!r.ok)throw new Error(d.message||'Ошибка запроса')
@@ -71,8 +88,30 @@ function App(){
   }
   async function login(e:any){
     e.preventDefault();setError('')
-    try{const d=await api('/auth/login',{method:'POST',body:JSON.stringify({email,password})});localStorage.setItem('token',d.accessToken);setToken(d.accessToken);setCurrentUser(d.user)}
-    catch(e:any){setError(e.message)}
+    try{
+      const r=await fetch(API+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password,twoFactorCode:twoFactorRequired?twoFactorCode:undefined})})
+      const d=await r.json().catch(()=>({}))
+      if(r.status===401&&d.code==='TWO_FACTOR_REQUIRED'){setTwoFactorRequired(true);setError('Введите код из приложения-аутентификатора.');return}
+      if(!r.ok)throw new Error(d.message||'Ошибка запроса')
+      localStorage.setItem('token',d.accessToken);localStorage.setItem('refreshToken',d.refreshToken);setToken(d.accessToken);setCurrentUser(d.user);setTwoFactorRequired(false);setTwoFactorCode('');setPassword('')
+    }catch(e:any){setError(e.message)}
+  }
+  async function logout(){
+    const refreshToken=localStorage.getItem('refreshToken')
+    try{if(refreshToken)await fetch(API+'/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken})})}catch{}
+    localStorage.removeItem('token');localStorage.removeItem('refreshToken');setToken('');setCurrentUser(null);setSelected(null);setWizard(false)
+  }
+  async function setupTwoFactor(){
+    setError('')
+    try{setTwoFactorSetup(await api('/auth/2fa/setup',{method:'POST'}))}catch(e:any){setError(e.message)}
+  }
+  async function enableTwoFactor(){
+    setError('')
+    try{await api('/auth/2fa/enable',{method:'POST',body:JSON.stringify({code:twoFactorCode})});const d=await api('/auth/me');setCurrentUser(d.user);setTwoFactorSetup(null);setTwoFactorCode('')}catch(e:any){setError(e.message)}
+  }
+  async function disableTwoFactor(){
+    setError('')
+    try{await api('/auth/2fa/disable',{method:'POST',body:JSON.stringify({password:twoFactorDisablePassword,code:twoFactorDisableCode})});const d=await api('/auth/me');setCurrentUser(d.user);setTwoFactorDisablePassword('');setTwoFactorDisableCode('')}catch(e:any){setError(e.message)}
   }
   async function loadForeigners(){
     if(!token)return
@@ -432,6 +471,23 @@ function App(){
           <p><b>Email:</b> {currentUser?.email||'—'}</p>
           <p><b>Роль:</b> {roleLabel(currentUser?.role)}</p>
         </div>
+        <div className="panel pad">
+          <h2>Безопасность</h2>
+          <p>Двухфакторная аутентификация: <b>{currentUser?.two_factor_enabled?'включена':'не включена'}</b></p>
+          {!currentUser?.two_factor_enabled&&!twoFactorSetup&&<button type="button" className="primary" onClick={setupTwoFactor}>Настроить 2FA</button>}
+          {twoFactorSetup&&<div className="stack">
+            <p><b>Секрет:</b> {twoFactorSetup.secret}</p>
+            <textarea readOnly value={twoFactorSetup.otpauthUri}/>
+            <p className="muted">Добавьте секрет в Google Authenticator, Microsoft Authenticator или другое TOTP-приложение.</p>
+            <input inputMode="numeric" maxLength={6} placeholder="Код 2FA" value={twoFactorCode} onChange={e=>setTwoFactorCode(e.target.value)}/>
+            <div><button type="button" className="primary" onClick={enableTwoFactor}>Включить 2FA</button> <button type="button" onClick={()=>setTwoFactorSetup(null)}>Отмена</button></div>
+          </div>}
+          {currentUser?.two_factor_enabled&&<div className="stack">
+            <input type="password" placeholder="Текущий пароль" value={twoFactorDisablePassword} onChange={e=>setTwoFactorDisablePassword(e.target.value)}/>
+            <input inputMode="numeric" maxLength={6} placeholder="Текущий код 2FA" value={twoFactorDisableCode} onChange={e=>setTwoFactorDisableCode(e.target.value)}/>
+            <button type="button" className="danger" onClick={disableTwoFactor}>Отключить 2FA</button>
+          </div>}
+        </div>
         {['SUPER_ADMIN','ORG_ADMIN'].includes(currentUser?.role) && <div className="panel pad">
           <h2>Пользователи</h2>
           <form onSubmit={saveUser} className="stack">
@@ -562,12 +618,13 @@ function App(){
       <form onSubmit={login} className="stack">
         <label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="username" required/></label>
         <label>Пароль<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/></label>
+        {twoFactorRequired&&<label>Код 2FA<input inputMode="numeric" maxLength={6} value={twoFactorCode} onChange={e=>setTwoFactorCode(e.target.value)} autoComplete="one-time-code" required/></label>}
         <button className="primary" type="submit">Войти</button>
       </form>
     </div>
   </div>
 
-  return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null);setWizard(false)}}>{x}</button>)}<button className="logout" onClick={()=>{localStorage.removeItem('token');setToken(null);setSelected(null);setWizard(false)}}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, документу, телефону..." value={q} onChange={e=>setQ(e.target.value)}/><span>{currentUser?`${currentUser.first_name||''} ${currentUser.last_name||''} · ${roleLabel(currentUser.role)}`:'Пользователь'}</span></header>{selected?Detail():Section()}{wizard&&Wizard()}</main></div>
+  return <div className="app"><aside><h2>◈ ForeignID</h2>{nav.map(x=><button key={x} className={'nav '+(active===x?'active':'')} onClick={()=>{setActive(x);setSelected(null);setWizard(false)}}>{x}</button>)}<button className="logout" onClick={logout}>Выйти</button></aside><main><header><input placeholder="Поиск по ФИО, документу, телефону..." value={q} onChange={e=>setQ(e.target.value)}/><span>{currentUser?`${currentUser.first_name||''} ${currentUser.last_name||''} · ${roleLabel(currentUser.role)}`:'Пользователь'}</span></header>{selected?Detail():Section()}{wizard&&Wizard()}</main></div>
 }
 createRoot(document.getElementById('root')!).render(<App/>)
 
